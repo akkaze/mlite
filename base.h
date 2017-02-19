@@ -1,0 +1,299 @@
+#ifndef MLITE_BASE_H_
+#define MLITE_BASE_H_
+#ifdef _MSC_VER
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+#ifndef _CRT_SECURE_NO_DEPRECATE
+#define _CRT_SECURE_NO_DEPRECATE
+#endif
+#define NOMINMAX
+#endif
+#include <cmath>
+#include <cstdio>
+#include <cfloat>
+#include <climits>
+#include <algorithm>
+#include <functional>
+#include <sstream>
+#include <string>
+#include <numeric>
+#ifdef _MSC_VER
+typedef signed char int8_t;
+typedef __int16 int16_t;
+typedef __int32 int32_t;
+typedef __int64 int64_t;
+typedef unsigned char uint8_t;
+typedef unsigned __int16 uint16_t;
+typedef unsigned __int32 uint32_t;
+typedef unsigned __int64 uint64_t;
+#else
+#include <inttypes.h>
+#endif
+// macro defintiions
+/*!
+* \brief if this macro is define to be 1,
+* mshadow should compile without any of other libs
+*/
+#ifndef MLITE_STAND_ALONE
+#define MLITE_STAND_ALONE 0
+#endif
+/*! \brief whether do padding during allocation */
+#ifndef MLITE_ALLOC_PAD
+#define MLITE_ALLOC_PAD true
+#endif
+/*!
+* \brief
+*  x dimension of data must be bigger pad_size * ratio to be alloced padded memory,
+*  otherwise use tide allocation
+*  for example, if pad_ratio=2, GPU memory alignement size is 32,
+*  then we will only allocate padded memory if x dimension > 64
+*  set it to 0 then we will always allocate padded memory
+*/
+#ifndef MLITE_MIN_PAD_RATIO
+#define MLITE_MIN_PAD_RATIO 2
+#endif
+#if MLITE_STAND_ALONE
+#define MLITE_USE_CBLAS 0
+#define MLITE_USE_MKL   0
+#define MLITE_USE_CUDA  0
+#endif
+
+/*!
+* \brief force user to use GPU stream during computation
+*  error will be shot when default stream NULL is used
+*/
+#ifndef MLITE_FORCE_STREAM
+#define MLITE_FORCE_STREAM 1
+#endif
+/*! \brief use CBLAS for CBLAS */
+#ifndef MLITE_USE_CBLAS
+#define MLITE_USE_CBLAS 0
+#endif
+/*! \brief use MKL for BLAS */
+#ifndef MLITE_USE_MKL
+#define MLITE_USE_MKL   0
+#endif
+/*!
+* \brief use CUDA support, must ensure that the cuda include path is correct,
+* or directly compile using nvcc
+*/
+#ifndef MLITE_USE_CUDA
+#define MLITE_USE_CUDA   1
+#endif
+/*!
+* \brief use CUDNN support, must ensure that the cudnn include path is correct
+*/
+#ifndef MLITE_USE_CUDNN
+#define MLITE_USE_CUDNN 0
+#endif
+/*!
+* \brief seems CUDAARCH is deprecated in future NVCC
+* set this to 1 if you want to use CUDA version smaller than 2.0
+*/
+#ifndef MLITE_OLD_CUDA
+#define MLITE_OLD_CUDA 0
+#endif
+/*!
+* \brief macro to decide existence of c++11 compiler
+*/
+#ifndef MLITE_IN_CXX11
+#define MLITE_IN_CXX11 (defined(__GXX_EXPERIMENTAL_CXX0X__) ||\
+                          __cplusplus >= 201103L || defined(_MSC_VER))
+#endif
+/*! \brief whether use SSE */
+#ifndef MLITE_USE_SSE
+#define MLITE_USE_SSE 1
+#endif
+/*! \brief whether use NVML to get dynamic info */
+#ifndef MLITE_USE_NVML
+#define MLITE_USE_NVML 0
+#endif
+// SSE is conflict with cudacc
+#ifdef __CUDACC__
+#undef MLITE_USE_SSE
+#define MLITE_USE_SSE 0
+#endif
+#if MLITE_USE_CBLAS
+extern "C" {
+#include <cblas.h>
+}
+#elif MLITE_USE_MKL
+#include <mkl.h>
+#include <mkl_cblas.h>
+#include <mkl_vsl.h>
+#include <mkl_vsl_functions.h>
+#endif
+#if MLITE_USE_CUDA
+#include <cuda.h>
+#include <cublas_v2.h>
+#include <curand.h>
+#endif
+#if MLITE_USE_CUDNN
+#include <cudnn.h>
+#endif
+#if MLITE_USE_NVML
+#include <nvml.h>
+#endif
+// --------------------------------
+// MLITE_XINLINE is used for inlining template code for both CUDA and CPU code
+#ifdef MLITE_XINLINE
+#error "MLITE_XINLINE must not be defined"
+#endif
+#ifdef _MSC_VER
+#define MLITE_FORCE_INLINE __forceinline
+#pragma warning(disable : 4068)
+#else
+#define MLITE_FORCE_INLINE inline __attribute__((always_inline))
+#endif
+#ifdef __CUDACC__
+#define MLITE_XINLINE MLTE_FORCE_INLINE __device__ __host__
+#else
+#define MLITE_XINLINE MLITE_FORCE_INLINE
+#endif
+/*! \brief cpu force inline */
+#define MLITE_CINLINE MLITE_FORCE_INLINE
+
+#if defined(__GXX_EXPERIMENTAL_CXX0X) ||\
+    defined(__GXX_EXPERIMENTAL_CXX0X__) || __cplusplus >= 201103L
+#define MLITE_CONSTEXPR constexpr
+#else
+#define MLITE_CONSTEXPR const
+#endif
+
+/*!
+* \brief default data type for tensor string
+*  in code release, change it to default_real_t
+*  during development, change it to empty string so that missing
+*  template arguments can be detected
+*/
+#ifndef MLITE_DEFAULT_DTYPE
+#define MLITE_DEFAULT_DTYPE = default_real_t
+#endif
+#if MLITE_IN_CXX11	
+#define MLITE_THROW_EXCEPTION noexcept(false)
+#define MLITE_NO_EXCEPTION  noexcept(true)
+#else
+#define MLITE_THROW_EXCEPTION
+#define MLITE_NO_EXCEPTION
+#endif
+
+/*!
+* \brief Protected cuda call in mLITE
+* \param func Expression to call.
+* It checks for CUDA errors after invocation of the expression.
+*/
+#define MLITE_CUDA_CALL(func)                                      \
+  {                                                                \
+    cudaError_t e = (func);                                        \
+    if (e == cudaErrorCudartUnloading) {                           \
+      throw dmlc::Error(cudaGetErrorString(e));                    \
+    }                                                              \
+    CHECK(e == cudaSuccess)                                        \
+        << "CUDA: " << cudaGetErrorString(e);                      \
+  }
+
+/*!
+* \brief Run function and catch error, log unknown error.
+* \param func Expression to call.
+*/
+#define MLITE_CATCH_ERROR(func)                                         \
+  {                                                                     \
+    try {                                                               \
+      (func);                                                           \
+    } catch (const mlite::Error &e) {                                    \
+      std::string what = e.what();                                      \
+      if (what.find("driver shutting down") == std::string::npos) {     \
+        LOG(ERROR) << "Ignore CUDA Error " << what;                     \
+      }                                                                 \
+    }                                                                   \
+  }
+
+/*! \brief namespace for MLITE */
+namespace mlite {
+/*! \brief buffer size for each random number generator */
+const unsigned kRandBufferSize = 1000000;
+/*! \brief pi  */
+const float kPi = 3.1415926f;
+/*! \brief type that will be used for index */
+typedef unsigned index_t;
+const index_t kMaxIndex = std::numeric_limits<index_t>::max();
+#ifdef _WIN32
+/*! \brief openmp index for windows */
+typedef int64_t openmp_index_t;
+#else
+/*! \brief openmp index for linux */
+typedef index_t openmp_index_t;
+#endif
+/*! \brief data type flag */
+enum TypeFlag {
+	kFloat32,
+	kFloat64,
+	kFloat16,
+	kUint8,
+	kInt32
+};
+template<typename DType>
+struct DataType;
+
+template<>
+struct DataType<float> {
+	static const int kFlag = kFloat32;
+#if (MLITE_USE_CUDA && MLITE_USE_CUDNN)
+	static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_FLOAT;
+	typedef float ScaleType;
+#endif
+};
+template<>
+struct DataType<double> {
+	static const int kFlag = kFloat64;
+#if (MLITE_USE_CUDA && MLITE_USE_CUDNN)
+	static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_DOUBLE;
+	typedef double ScaleType;
+#endif
+};
+template<>
+struct DataType<half::half_t> {
+	static const int kFlag = kFloat16;
+#if (MLITE_USE_CUDA && MLITE_USE_CUDNN == 1)
+	static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_HALF;
+	typedef float ScaleType;
+#endif
+};
+template<>
+struct DataType<uint8_t> {
+	static const int kFlag = kUint8;
+};
+template<>
+struct DataType<int32_t> {
+	static const int kFlag = kInt32;
+};
+
+/*! \brief type enum value for default real type */
+const int default_type_flag = DataType<default_real_t>::kFlag;
+
+enum LayoutFlag {
+	kNCHW = 0,
+	kNHWC,
+	kCHWN,
+
+	kNCDHW = 1 << 5,
+	kNDHWC,
+	kCDHWN
+};
+
+template<int layout>
+struct LayoutType;
+
+template<>
+struct LayoutType<kNCHW> {
+	static const index_t kNdim = 4;
+#if (MLITE_USE_CUDA && MLITE_USE_CUDNN && CUDNN_MAJOR >= 4)
+	static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
+#else
+	static const int kCudnnFlag = -1;
+#endif
+};
+}
+
+#endif
