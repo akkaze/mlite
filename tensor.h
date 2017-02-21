@@ -31,52 +31,84 @@ struct Shape;
 class Range {
 public:
 	Range() : Range(0, 0) {}
-	Range(size_t begin, size_t end) : begin_(begin), end_(end) { }
-	Range(const std::initializer_list<size_t>& init_list) {
+	Range(index_t begin, index_t end) : begin_(begin), end_(end) { }
+	Range(const std::initializer_list<index_t>& init_list) {
 		CHECK_EQ(init_list.size(), 2);
 		begin_ = *(init_list.begin());
 		end_ = *(init_list.end() - 1);
 	}
-	size_t begin() const { return begin_; }
-	size_t end() const { return end_; }
-	size_t size() const { return end_ - begin_; }
+	index_t begin() const { return begin_; }
+	index_t end() const { return end_; }
+	index_t size() const { return end_ - begin_; }
 private:
-	size_t begin_;
-	size_t end_;
+	index_t begin_;
+	index_t end_;
 };
 /**
 * \brief a indices (item1, item2, ..., itemN)
 */
 class Indices {
 public:
-	Indices() = default;
-	Indices(const int& size) {
+	Indices() { dptr_ = NULL; }
+	Indices(const size_t& size):Indices() {
 		size_ = size;
-		dptr_ = new size_t[size];
-		memset(dptr_, 0, sizeof(size_t) * size_);
+		dptr_ = new index_t[size];
+		memset(dptr_, 0, sizeof(index_t) * size_);
 	}
-	Indices(const std::initializer_list<size_t>& init_list) {
-		size_ = init_list.size();
+	Indices(const std::initializer_list<index_t>& init_list):Indices() {
+		this->Resize(init_list.size());
 		index_t idx = 0;
 		for (auto& item : init_list) {
 			*(dptr_ + idx) = item;
 			idx++;
 		}
 	}
-	~Indices() {
-		if (dptr_) {
-			delete[] dptr_;
-			size_ = 0;
-		}
-
+	Indices(const Indices& other):Indices() {
+		this->Resize(other.size());
+		memcpy(dptr_, other.data(), sizeof(index_t) * size_);
 	}
-	size_t& operator[](size_t idx) { return *(dptr_ + idx); }
-	size_t* data() const { return dptr_; }
-	size_t size() const { return size_; }
+	
+	~Indices() {
+		if (dptr_) 
+			delete[] dptr_;
+		size_ = 0;
+	}
+	void Resize(size_t new_size) {
+		if (dptr_) 
+			delete[] dptr_;
+		size_ = new_size;
+		dptr_ = new index_t[new_size];
+	}
+	Indices& operator=(Indices &other) {
+		this->Resize(other.size());
+		memcpy(dptr_, other.data(), sizeof(index_t) * size_);
+		return *this;
+	}
+	Indices& operator=(const std::initializer_list<index_t>& init_list) {
+		this->Resize(init_list.size());
+		index_t idx = 0;
+		for (auto& item : init_list) {
+			*(dptr_ + idx) = item;
+			idx++;
+		}
+		return *this;
+	}
+	index_t& operator[](index_t idx) { return *(dptr_ + idx); }
+	const index_t& operator[](index_t idx) const { return *(dptr_ + idx); }
+	index_t* data() const { return dptr_; }
+	index_t size() const { return size_; }
+
+
+	friend std::ostream &operator<<(std::ostream &, const Indices&);
 private:
-	size_t* dptr_;
+	index_t* dptr_;
 	size_t size_;
 };
+std::ostream &operator<<(std::ostream &os, const Indices& indices) {
+	for (index_t i = 0; i < indices.size_; i++)
+		os << indices[i] << '\t';
+	return os;
+}
 /*!
 * \brief shape of a tensor
 * \tparam dimension dimension of tensor
@@ -85,7 +117,7 @@ template<int dimension>
 struct Shape {
 	/*! \brief dimension of current shape */
 	static const int kDimension = dimension;
-	/*! \brief storing the dimension information */
+	/*! \brief string the dimension information */
 	index_t shape_[kDimension];
 	/*! \brief default constructor, do nothing */
 	MLITE_XINLINE Shape(void) {}
@@ -124,8 +156,8 @@ struct Shape {
 		return s;
 	}
 	/*! \return number of valid elements */
-	MLITE_XINLINE size_t Size(void) const {
-		size_t size = this->shape_[0];
+	MLITE_XINLINE index_t Size(void) const {
+		index_t size = this->shape_[0];
 #pragma unroll
 		for (int i = 1; i < kDimension; ++i) {
 			size *= this->shape_[i];
@@ -187,7 +219,9 @@ public:
 	Shape<dimension> shape_;
 	Indices strides_;
 	Stream<Device> *stream_;
-	MLITE_XINLINE Tensor(void) : stream_(NULL) {}
+	MLITE_XINLINE Tensor(void) : stream_(NULL) {
+		this->GetStrides();
+	}
 	MLITE_XINLINE Tensor(const Shape<dimension> &shape)
 		: shape_(shape), stream_(NULL) {
 		this->GetStrides();
@@ -204,21 +238,22 @@ public:
 	MLITE_XINLINE Tensor(DType *dptr,
 		const Shape<dimension> &shape,
 		index_t stride, Stream<Device> *stream)
-		: dptr_(dptr), shape_(shape), stream_(stream) {}
+		: dptr_(dptr), shape_(shape), stream_(stream) {
+		this->GetStrides();
+	}
 	MLITE_XINLINE void set_stream(Stream<Device> *stream) {
 		this->stream_ = stream;
 		this->GetStrides();
 	}
-	template<int startdim>
-	MLITE_XINLINE size_t MemSize(void) const {
+	MLITE_XINLINE size_t MemSize(int startdim) const {
 		size_t memsz = 1;
-#pragma unroll
+//#pragma unroll
 		for (int i = startdim; i < dimension; ++i) {
 			memsz *= this->shape_[i];
 		}
 		return memsz;
 	}
-	MLITE_XINLINE index_t size(index_t idx) const {
+	MLITE_XINLINE size_t size(index_t idx) const {
 		return shape_[idx];
 	}
 	MLITE_XINLINE Tensor<Device, 1, DType> FlatTo1D(void) const {
@@ -226,6 +261,7 @@ public:
 	}
 	MLITE_XINLINE void FlatTo1D(void) {
 		shape_ = shape_.FlatTo1D();
+		this->GetStrides();
 	}
 	MLITE_XINLINE Tensor<Device, dimension, DType> &
 		operator=(const Tensor<Device, dimension, DType> &other) {
@@ -235,32 +271,57 @@ public:
 		stride_ = other.strides_;
 		return *this;
 	}
-	MLITE_XINLINE void GetStrides(void) const {
-		for (index_t i = 0; i < dimension; i++) {
-			strides_[i] = MemSize<i>();
+	MLITE_XINLINE void GetStrides(void) {
+		strides_.Resize(dimension);
+		for (index_t i = 0; i < dimension - 1; i++) {
+			strides_[i] = MemSize(i + 1);
 		}
+		strides_[dimension - 1] = 1;
 	}
-	MLITE_XINLINE IndexPhysicalToLogical(const index_t& physical_index,
-		index_t logical_indices[]) { 
+	MLITE_XINLINE DType operator[](const Indices& indices) {
+		index_t physical_index = IndexLogicalToPhysical(indices);
+		return *(dptr_ + physical_index);
+	}
+	///////////////////////////////////////////////////////
+	MLITE_XINLINE Indices IndexPhysicalToLogical(
+		const index_t& physical_index) { 
+		Indices logical_indices(dimension);
 		index_t res_dim = physical_index;
 		for (index_t i = dimension - 1; i > 0; i--) {
-			logical_indices[i] = res_dim % strides_[i - 1];
-			res_dim /= strides_[i - 1];
+			logical_indices[i] = res_dim % strides_[i];
+			res_dim /= strides_[i];
 		}
 		logical_indices[0] = res_dim;
+		return logical_indices;
 	}
-	MLITE_XINLINE IndexLogicalToPhysical(index_t logical_indices[],
-		index_t& physical_index) {
-		physical_index = 0;
-		for (index_t i = dimension - 1; i > = 0; i--)
-			physical_index *= strides_[i];
+	MLITE_XINLINE index_t IndexLogicalToPhysical(
+		Indices logical_indices) {
+		index_t physical_index = 0;
+		for (index_t i = 0; i < dimension; i++) {
+			physical_index += logical_indices[i] * strides_[i];
+		}
+		
+		return physical_index;
+	}
+
+	/////////////////////////////////////////////////////////////////
+	/*! \set given indices with datum */
+	MLITE_XINLINE void Set(Indices indices, const DType& datum) {
+				
 	}
 	MLITE_XINLINE void Reshape(const Shape<dimension>& dst_shape) {
 		CHECK_EQ(dst_shape.Size(), shape_.Size()) <<
 			"original and transformed shape must have same size";
 		shape_ = dst_shape;
 	}
-	MLITE_XINLINE void Transpose(Indices indices);
+	MLITE_XINLINE void Transpose(Indices indices) {
+		Shape<dimension> orig_shape = shape_;
+		Indices orig_indices = indices_;
+		for (index_t i = 0; i < dimension; i++) {
+			shape_[indices[i]] = orig_shape[i];
+			strides_[indices[i]] = orig_indices[i];
+		}
+	}
 };
 template<typename Device>
 inline void InitTensorEngine(int device_id = 0);
