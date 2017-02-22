@@ -79,7 +79,7 @@ public:
 		size_ = new_size;
 		dptr_ = new index_t[new_size];
 	}
-	Indices& operator=(Indices &other) {
+	Indices& operator=(const Indices& other) {
 		this->Resize(other.size());
 		memcpy(dptr_, other.data(), sizeof(index_t) * size_);
 		return *this;
@@ -111,14 +111,11 @@ std::ostream &operator<<(std::ostream &os, const Indices& indices) {
 }
 /*!
 * \brief shape of a tensor
-* \tparam dimension dimension of tensor
-*/
-template<int dimension>
 struct Shape {
 	/*! \brief dimension of current shape */
-	static const int kDimension = dimension;
+	size_t dimension;
 	/*! \brief string the dimension information */
-	index_t shape_[kDimension];
+	index_t* shape_;
 	/*! \brief default constructor, do nothing */
 	MLITE_XINLINE Shape(void) {}
 	/*! \brief constuctor */
@@ -247,13 +244,13 @@ public:
 	}
 	MLITE_XINLINE size_t MemSize(int startdim) const {
 		size_t memsz = 1;
-//#pragma unroll
+#pragma unroll
 		for (int i = startdim; i < dimension; ++i) {
 			memsz *= this->shape_[i];
 		}
 		return memsz;
 	}
-	MLITE_XINLINE size_t size(index_t idx) const {
+	MLITE_XINLINE size_t dim_size(index_t idx) const {
 		return shape_[idx];
 	}
 	MLITE_XINLINE Tensor<Device, 1, DType> FlatTo1D(void) const {
@@ -268,7 +265,7 @@ public:
 		dptr_ = other.dptr_;
 		shape_ = other.shape_;
 		stream_ = other.stream_;
-		stride_ = other.strides_;
+		strides_ = other.strides_;
 		return *this;
 	}
 	MLITE_XINLINE void GetStrides(void) {
@@ -278,13 +275,15 @@ public:
 		}
 		strides_[dimension - 1] = 1;
 	}
-	MLITE_XINLINE DType operator[](const Indices& indices) {
+	MLITE_XINLINE DType& operator[](const Indices& indices) {
 		index_t physical_index = IndexLogicalToPhysical(indices);
 		return *(dptr_ + physical_index);
 	}
 	///////////////////////////////////////////////////////
 	MLITE_XINLINE Indices IndexPhysicalToLogical(
-		const index_t& physical_index) { 
+		const index_t& physical_index) {
+		CHECK_LT(physical_index, shape_.Size()) << "\
+			Physical index should be smaller than number of elements";
 		Indices logical_indices(dimension);
 		index_t res_dim = physical_index;
 		for (index_t i = dimension - 1; i > 0; i--) {
@@ -298,16 +297,19 @@ public:
 		Indices logical_indices) {
 		index_t physical_index = 0;
 		for (index_t i = 0; i < dimension; i++) {
+			CHECK_LT(logical_indices[i], shape_[i]) << "\
+				Logical index along an axis should be smaller than dimension of that aixs";
 			physical_index += logical_indices[i] * strides_[i];
 		}
-		
 		return physical_index;
 	}
 
 	/////////////////////////////////////////////////////////////////
 	/*! \set given indices with datum */
 	MLITE_XINLINE void Set(Indices indices, const DType& datum) {
-				
+		index_t idx = IndexLogicalToPhysical(indices);
+		std::cout << idx << std::endl;
+		*(dptr_ + idx) = datum;
 	}
 	MLITE_XINLINE void Reshape(const Shape<dimension>& dst_shape) {
 		CHECK_EQ(dst_shape.Size(), shape_.Size()) <<
@@ -316,7 +318,7 @@ public:
 	}
 	MLITE_XINLINE void Transpose(Indices indices) {
 		Shape<dimension> orig_shape = shape_;
-		Indices orig_indices = indices_;
+		Indices orig_indices = indices;
 		for (index_t i = 0; i < dimension; i++) {
 			shape_[indices[i]] = orig_shape[i];
 			strides_[indices[i]] = orig_indices[i];
@@ -358,5 +360,8 @@ template<int dim, typename DType>
 inline void Copy(Tensor<gpu, dim, DType> dst,
 	const Tensor<cpu, dim, DType> &src,
 	Stream<gpu> *stream = NULL);
+template<typename Op, int dim, typename DType>
+inline void Map(Tensor<cpu, dim, DType>& ts);
 }
+
 #endif
