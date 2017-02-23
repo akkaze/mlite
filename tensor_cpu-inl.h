@@ -25,72 +25,81 @@ template<>
 MLITE_XINLINE void DeleteStream<cpu>(Stream<cpu> *stream) {
 	delete stream;
 }
-template<int dim, typename DType>
-MLITE_XINLINE void AllocSpace(Tensor<cpu, dim, DType> *obj) {
-	obj->dptr_ = reinterpret_cast<DType*>(
-		malloc(obj->shape_.Size() * sizeof(DType)));
+template<typename DType>
+MLITE_XINLINE void AllocSpace(Tensor<cpu, DType> *obj) {
+	obj->set_dptr(reinterpret_cast<DType*>(
+		malloc(obj->shape_.Size() * sizeof(DType))));
 }
 template<typename Device,typename DType>
-MLITE_XINLINE Tensor<Device, dim, DType>
+MLITE_XINLINE Tensor<Device, DType>
 NewTensor(const Shape& shape, 
-	DType initv, Stream<Device> *stream_) {
-	Tensor<Device, dim, DType> obj(shape);
-	obj.stream_ = stream_;
+	DType initv, Stream<Device> *stream) {
+	Tensor<Device, DType> obj(shape);
+	obj.set_stream(stream);
 	AllocSpace(&obj);
 	for (index_t i = 0; i < shape.Size(); i++)
 		*(obj.dptr(i)) = initv;
 	return obj;
 }
-template<int dim, typename DType>
-MLITE_XINLINE void FreeSpace(Tensor<cpu, dim, DType> *obj) {
+template<typename DType>
+MLITE_XINLINE void FreeSpace(Tensor<cpu, DType> *obj) {
 	free(obj->data());
 	obj->data() = NULL;
 }
-template<int dim, typename DType>
-MLITE_XINLINE void Copy(Tensor<cpu, dim, DType> _dst,
-	const Tensor<cpu, dim, DType> &_src,
+template<typename DType>
+MLITE_XINLINE void Copy(Tensor<cpu, DType> _dst,
+	const Tensor<cpu, DType> &_src,
 	Stream<cpu> *stream) {
 	CHECK_EQ(_dst.shape(), _src.shape())
 		<< "Copy:shape mismatch:" << _dst.shape_ << " vs " << _src.shape_;
 	memcpy(_dst.dptr_, _src.dptr_, sizeof(DType) * _dst.shape_.Size());
 }
-template<typename Op,int dim,typename DType>
-MLITE_XINLINE void Map(Tensor<cpu, dim, DType>& ts) {
+template<typename Op,typename DType>
+MLITE_XINLINE void Map(Tensor<cpu, DType>& ts) {
 	size_t size = ts.shape_.Size();
 #pragma omp parallel for
 	for (index_t i = 0; i < size; i++)
-		*(ts.dptr_ + i) = Op()(*(ts.dptr_ + i));
+		*ts.dptr(i) = Op()(*ts.dptr(i));
 }
-template<int dim,typename DType>
-MLITE_XINLINE Tensor<cpu, dim, DType> Slice(const Tensor<cpu, dim, DType>& src,
+template<typename DType>
+inline void SetRandom(Tensor<cpu, DType>& ts,
+	const DType& min,
+	const DType& max) {
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_real_distribution<DType> dis(min, max);
+#pragma omp parallel for
+}
+template<,typename DType>
+MLITE_XINLINE Tensor<cpu, DType> Slice(const Tensor<cpu, DType>& src,
 	const std::vector<Range>& ranges) {
-	CHECK_EQ(ranges.size(), dim);
-	Shape<dim> dst_shape;
+	CHECK_EQ(ranges.size(), src.dims());
+	Shape dst_shape(src.dims());
 #pragma unroll
-	for (index_t i = 0; i < dim; i++)
+	for (index_t i = 0; i < src.dims(); i++)
 		dst_shape[i] = ranges[i].size();
 	CHECK_GT(dst_shape.Size(), 0);
-	Tensor<cpu, dim, DType> dst = NewTensor(dst_shape, 0, src.stream_);
+	Tensor<cpu, DType> dst = NewTensor(dst_shape, 0, src.stream());
 	//datum index in the destination tensor data array
 	index_t dst_id = 0;
 	Indices indices;
 	for (dst_id = 0; dst_id < dst.size(); dst_id++) {
 		indices = dst.IndexPhysicalToLogical(dst_id);
-		for (index i = 0; i < dim; i++)
+		for (index i = 0; i < src.dims(); i++)
 			indices[i] += ranges[i].begin();
 		index_t src_id = 0;
 		src.IndexLogicalToPhysical(src_id, indices);
-		*(dst.dptr_ + dst_id) = *(src.dptr_ + src_id);
+		*dst.dptr(dst_id) = *src.dptr(src_id);
 	}
 }
 
-template<typename Op,int dim,typename DType>
-MLITE_XINLINE Tensor<cpu, dim, DType> ReduceOverAxis(
-	const Tensor<cpu, dim, DType>& src,
+template<typename Op,typename DType>
+MLITE_XINLINE Tensor<cpu, DType> ReduceOverAxis(
+	const Tensor<cpu, DType>& src,
 	const index_t& axis) {
-	Shape<dim - 1> dst_shape;
+	Shape dst_shape;
 	const Shape<dim>& src_shape = src.shape_;
-	for (index_t i = 0; i < dim; i++) {
+	for (index_t i = 0; i < src.dims(); i++) {
 		if (i == axis)
 			continue;
 		else if (i < axis)

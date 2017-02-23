@@ -19,6 +19,8 @@
 #include <sstream>
 #include <string>
 #include <numeric>
+#include <random>
+#include <type_traits>
 #ifdef _MSC_VER
 typedef signed char int8_t;
 typedef __int16 int16_t;

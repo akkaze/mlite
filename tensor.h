@@ -117,8 +117,11 @@ struct Shape {
 	index_t* shape_;
 	/*! \brief default constructor, do nothing */
 	MLITE_XINLINE Shape(void) { shape_ = NULL; }
+	MLITE_XINLINE Shape(const size_t& dims) : Shape() {
+		this->Resize(dims);
+	}
 	/*! \brief constuctor */
-	MLITE_XINLINE Shape(const Shape &s) {
+	MLITE_XINLINE Shape(const Shape &s) : Shape() {
 		this->Resize(s.dims_);
 		for (int i = 0; i < dims_; ++i) {
 			this->shape_[i] = s[i];
@@ -128,7 +131,7 @@ struct Shape {
 		if (shape_)
 			delete[] shape_;
 	}
-	MLITE_XINLINE Shape(const std::initializer_list<int>& init_list) {
+	MLITE_XINLINE Shape(const std::initializer_list<int>& init_list) : Shape() {
 		this->Resize(init_list.size());
 		index_t idx = 0;
 		for (auto& item : init_list) {
@@ -214,19 +217,19 @@ struct Shape {
 	}
 };  // Shape
 MLITE_XINLINE Shape Shape1(index_t s0) {
-	Shape s; s[0] = s0;
+	Shape s(1); s[0] = s0;
 	return s;
 }
 MLITE_XINLINE Shape Shape2(index_t s0, index_t s1) {
-	Shape s; s[0] = s0; s[1] = s1;
+	Shape s(2); s[0] = s0; s[1] = s1;
 	return s;
 }
 MLITE_XINLINE Shape Shape3(index_t s0, index_t s1,index_t s2) {
-	Shape s; s[0] = s0; s[1] = s1; s[2] = s2;
+	Shape s(3); s[0] = s0; s[1] = s1; s[2] = s2;
 	return s;
 }
 MLITE_XINLINE Shape Shape4(index_t s0, index_t s1, index_t s2, index_t s3) {
-	Shape s; s[0] = s0; s[1] = s1; s[2] = s2; s[3] = s3;
+	Shape s(4); s[0] = s0; s[1] = s1; s[2] = s2; s[3] = s3;
 	return s;
 }
 /*!
@@ -270,10 +273,7 @@ public:
 		: dptr_(dptr), dims_(shape.dims()), shape_(shape), stream_(stream) {
 		this->GetStrides();
 	}
-	MLITE_XINLINE void set_stream(Stream<Device> *stream) {
-		this->stream_ = stream;
-		this->GetStrides();
-	}
+	///////////////getters////////////////////////////
 	MLITE_XINLINE DType* data() const {
 		return dptr_;
 	}
@@ -282,6 +282,15 @@ public:
 	}
 	MLITE_XINLINE Shape shape() const {
 		return shape_;
+	}
+	MLITE_XINLINE size_t size() const {
+		return shape_.Size();
+	}
+	MLITE_XINLINE size_t dims() const {
+		return dims_;
+	}
+	MLITE_XINLINE const Stream<Device>& stream() const {
+		return stream_;
 	}
 	MLITE_XINLINE size_t MemSize(int startdim) const {
 		size_t memsz = 1;
@@ -302,8 +311,8 @@ public:
 		shape_ = shape_.FlatTo1D();
 		this->GetStrides();
 	}
-	MLITE_XINLINE Tensor<Device, dimension, DType> &
-		operator=(const Tensor<Device, dimension, DType> &other) {
+	MLITE_XINLINE Tensor<Device, DType> &
+		operator=(const Tensor<Device, DType> &other) {
 		dptr_ = other.dptr_;
 		shape_ = other.shape_;
 		stream_ = other.stream_;
@@ -316,11 +325,18 @@ public:
 		for (index_t i = 0; i < dims_ - 1; i++) {
 			strides_[i] = MemSize(i + 1);
 		}
-		strides_[dimension - 1] = 1;
+		strides_[dims_ - 1] = 1;
 	}
 	MLITE_XINLINE DType& operator[](const Indices& indices) {
 		index_t physical_index = IndexLogicalToPhysical(indices);
 		return *(dptr_ + physical_index);
+	}
+	///////////////setters/////////////////////////////////
+	MLITE_XINLINE void set_dptr(DType* dptr) {
+		dptr_ = dptr;
+	}
+	MLITE_XINLINE void set_stream(Stream<Device>* stream) {
+		stream_ = stream;
 	}
 	///////////////////////////////////////////////////////
 	MLITE_XINLINE Indices IndexPhysicalToLogical(
@@ -361,12 +377,13 @@ public:
 	}
 	MLITE_XINLINE void Transpose(Indices indices) {
 		Shape orig_shape = shape_;
-		Indices orig_indices = indices;
+		Indices orig_strides = strides_;
 		for (index_t i = 0; i < dims_; i++) {
 			shape_[indices[i]] = orig_shape[i];
-			strides_[indices[i]] = orig_indices[i];
+			strides_[indices[i]] = orig_strides[i];
 		}
 	}
+	
 };
 template<typename Device>
 inline void InitTensorEngine(int device_id = 0);
@@ -405,6 +422,8 @@ inline void Copy(Tensor<gpu, DType> dst,
 	Stream<gpu> *stream = NULL);
 template<typename Op, typename DType>
 inline void Map(Tensor<cpu, DType>& ts);
+template<typename DType>
+inline void SetRandom(Tensor<cpu, DType>& ts);
 }
 
 #endif
