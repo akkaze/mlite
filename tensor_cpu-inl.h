@@ -30,27 +30,27 @@ MLITE_XINLINE void AllocSpace(Tensor<cpu, dim, DType> *obj) {
 	obj->dptr_ = reinterpret_cast<DType*>(
 		malloc(obj->shape_.Size() * sizeof(DType)));
 }
-template<typename Device,typename DType, int dim>
+template<typename Device,typename DType>
 MLITE_XINLINE Tensor<Device, dim, DType>
-NewTensor(const Shape<dim> &shape, 
+NewTensor(const Shape& shape, 
 	DType initv, Stream<Device> *stream_) {
 	Tensor<Device, dim, DType> obj(shape);
 	obj.stream_ = stream_;
 	AllocSpace(&obj);
 	for (index_t i = 0; i < shape.Size(); i++)
-		*(obj.dptr_ + i) = initv;
+		*(obj.dptr(i)) = initv;
 	return obj;
 }
 template<int dim, typename DType>
 MLITE_XINLINE void FreeSpace(Tensor<cpu, dim, DType> *obj) {
-	free(obj->dptr_);
-	obj->dptr_ = NULL;
+	free(obj->data());
+	obj->data() = NULL;
 }
 template<int dim, typename DType>
 MLITE_XINLINE void Copy(Tensor<cpu, dim, DType> _dst,
 	const Tensor<cpu, dim, DType> &_src,
 	Stream<cpu> *stream) {
-	CHECK_EQ(_dst.shape_, _src.shape_)
+	CHECK_EQ(_dst.shape(), _src.shape())
 		<< "Copy:shape mismatch:" << _dst.shape_ << " vs " << _src.shape_;
 	memcpy(_dst.dptr_, _src.dptr_, sizeof(DType) * _dst.shape_.Size());
 }

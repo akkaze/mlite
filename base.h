@@ -9,6 +9,7 @@
 #endif
 #define NOMINMAX
 #endif
+#include <iostream>
 #include <cmath>
 #include <cstdio>
 #include <cfloat>
@@ -38,21 +39,8 @@ typedef unsigned __int64 uint64_t;
 #ifndef MLITE_STAND_ALONE
 #define MLITE_STAND_ALONE 0
 #endif
-/*! \brief whether do padding during allocation */
-#ifndef MLITE_ALLOC_PAD
-#define MLITE_ALLOC_PAD true
-#endif
-/*!
-* \brief
-*  x dimension of data must be bigger pad_size * ratio to be alloced padded memory,
-*  otherwise use tide allocation
-*  for example, if pad_ratio=2, GPU memory alignement size is 32,
-*  then we will only allocate padded memory if x dimension > 64
-*  set it to 0 then we will always allocate padded memory
-*/
-#ifndef MLITE_MIN_PAD_RATIO
-#define MLITE_MIN_PAD_RATIO 2
-#endif
+
+
 #if MLITE_STAND_ALONE
 #define MLITE_USE_CBLAS 0
 #define MLITE_USE_MKL   0
@@ -201,7 +189,7 @@ extern "C" {
   {                                                                     \
     try {                                                               \
       (func);                                                           \
-    } catch (const mlite::Error &e) {                                    \
+    } catch (const mlite::Error &e) {                                   \
       std::string what = e.what();                                      \
       if (what.find("driver shutting down") == std::string::npos) {     \
         LOG(ERROR) << "Ignore CUDA Error " << what;                     \
@@ -225,75 +213,8 @@ typedef int64_t openmp_index_t;
 /*! \brief openmp index for linux */
 typedef index_t openmp_index_t;
 #endif
-/*! \brief data type flag */
-enum TypeFlag {
-	kFloat32,
-	kFloat64,
-	kFloat16,
-	kUint8,
-	kInt32
-};
-template<typename DType>
-struct DataType;
+typedef float default_real_t;
 
-template<>
-struct DataType<float> {
-	static const int kFlag = kFloat32;
-#if (MLITE_USE_CUDA && MLITE_USE_CUDNN)
-	static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_FLOAT;
-	typedef float ScaleType;
-#endif
-};
-template<>
-struct DataType<double> {
-	static const int kFlag = kFloat64;
-#if (MLITE_USE_CUDA && MLITE_USE_CUDNN)
-	static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_DOUBLE;
-	typedef double ScaleType;
-#endif
-};
-template<>
-struct DataType<half::half_t> {
-	static const int kFlag = kFloat16;
-#if (MLITE_USE_CUDA && MLITE_USE_CUDNN == 1)
-	static const cudnnDataType_t kCudnnFlag = CUDNN_DATA_HALF;
-	typedef float ScaleType;
-#endif
-};
-template<>
-struct DataType<uint8_t> {
-	static const int kFlag = kUint8;
-};
-template<>
-struct DataType<int32_t> {
-	static const int kFlag = kInt32;
-};
-
-/*! \brief type enum value for default real type */
-const int default_type_flag = DataType<default_real_t>::kFlag;
-
-enum LayoutFlag {
-	kNCHW = 0,
-	kNHWC,
-	kCHWN,
-
-	kNCDHW = 1 << 5,
-	kNDHWC,
-	kCDHWN
-};
-
-template<int layout>
-struct LayoutType;
-
-template<>
-struct LayoutType<kNCHW> {
-	static const index_t kNdim = 4;
-#if (MLITE_USE_CUDA && MLITE_USE_CUDNN && CUDNN_MAJOR >= 4)
-	static const cudnnTensorFormat_t kCudnnFlag = CUDNN_TENSOR_NCHW;
-#else
-	static const int kCudnnFlag = -1;
-#endif
-};
 }
 
 #endif
