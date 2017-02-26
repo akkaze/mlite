@@ -420,10 +420,5 @@ template<typename DType>
 inline void Copy(Tensor<gpu, DType> dst,
 	const Tensor<cpu, DType> &src,
 	Stream<gpu> *stream = NULL);
-template<typename Op, typename DType>
-inline void Map(Tensor<cpu, DType>& ts);
-template<typename DType>
-inline void SetRandom(Tensor<cpu, DType>& ts);
 }
-
 #endif

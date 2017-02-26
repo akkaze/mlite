@@ -10,6 +10,7 @@
 #define NOMINMAX
 #endif
 #include <iostream>
+#include <iomanip>
 #include <cmath>
 #include <cstdio>
 #include <cfloat>
