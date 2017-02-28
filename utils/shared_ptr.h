@@ -28,7 +28,7 @@ class shared_ptr {
 	Deleter* deleter_;
 protected:
 	void destory(){
-		deleter_(ptr_);
+		(*deleter_)(ptr_);
 	}
 public:
 	shared_ptr() : count_(new count(1)), ptr_(NULL), deleter_(NULL) {}
