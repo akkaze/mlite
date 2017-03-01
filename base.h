@@ -70,7 +70,14 @@ typedef unsigned __int64 uint64_t;
 * or directly compile using nvcc
 */
 #ifndef MLITE_USE_CUDA
-#define MLITE_USE_CUDA   1
+#define MLITE_USE_CUDA   0
+#endif
+/*!
+* \brief use CUDA support, must ensure that the cuda include path is correct,
+* or directly compile using nvcc
+*/
+#ifndef MLITE_USE_OCL
+#define MLITE_USE_OCL    1
 #endif
 /*!
 * \brief use CUDNN support, must ensure that the cudnn include path is correct
@@ -114,6 +121,14 @@ extern "C" {
 #include <mkl_cblas.h>
 #include <mkl_vsl.h>
 #include <mkl_vsl_functions.h>
+#endif
+#if MLITE_USE_OCL
+#ifdef __APPLE__
+#include <OpenCL/opencl.h>
+#include <unistd.h>
+#else
+#include <CL/cl.h>
+#endif
 #endif
 #if MLITE_USE_CUDA
 #include <cuda.h>

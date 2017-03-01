@@ -23,6 +23,10 @@ struct gpu {
 	static const int kDevMask = 1 << 1;
 };
 
+struct ocl {
+	static const bool kDevCPU = false;
+	static const int kDevMask = 1 << 2;
+};
 /**
 * \brief a range [begin, end)
 */
@@ -247,6 +251,9 @@ template<typename Device,typename DType MLITE_DEFAULT_DTYPE>
 struct Tensor  {
 public:
 	static const bool kDevCPU = Device::kDevCPU;
+#if MLITE_USE_OCL
+	cl_mem cl_data_;
+#endif
 	DType *dptr_;
 	Shape shape_;
 	Indices strides_;
@@ -277,6 +284,11 @@ public:
 	MLITE_XINLINE DType* data() const {
 		return dptr_;
 	}
+#ifdef MLITE_USE_OCL
+	MLITE_XINLINE const cl_mem& cl_data() const {
+		return cl_data_;
+	}
+#endif
 	MLITE_XINLINE DType* dptr(const index_t idx) const {
 		return dptr_ + idx;
 	}
@@ -328,45 +340,50 @@ public:
 		strides_[dims_ - 1] = 1;
 	}
 	MLITE_XINLINE DType& operator[](const Indices& indices) {
-		index_t physical_index = IndexLogicalToPhysical(indices);
+		index_t physical_index = IndexNDTo1D(indices);
 		return *(dptr_ + physical_index);
 	}
 	///////////////setters/////////////////////////////////
 	MLITE_XINLINE void set_dptr(DType* dptr) {
 		dptr_ = dptr;
 	}
+#ifdef MLITE_USE_OCL
+	MLITE_XINLINE void set_cl_data(const cl_mem& cl_data) {
+		cl_data_ = cl_data;
+	}
+#endif
 	MLITE_XINLINE void set_stream(Stream<Device>* stream) {
 		stream_ = stream;
 	}
 	///////////////////////////////////////////////////////
-	MLITE_XINLINE Indices IndexPhysicalToLogical(
+	MLITE_XINLINE Indices Index1DToND(
 		const index_t& physical_index) {
 		CHECK_LT(physical_index, shape_.Size()) << "\
 			Physical index should be smaller than number of elements";
-		Indices logical_indices(dims_);
-		index_t res_dim = physical_index;
+		Indices indices_nd(dims_);
+		index_t res_dim = index_1d;
 		for (index_t i = dims_ - 1; i > 0; i--) {
-			logical_indices[i] = res_dim % strides_[i];
+			indices_nd[i] = res_dim % strides_[i];
 			res_dim /= strides_[i];
 		}
-		logical_indices[0] = res_dim;
-		return logical_indices;
+		indices_nd[0] = res_dim;
+		return indices_nd;
 	}
-	MLITE_XINLINE index_t IndexLogicalToPhysical(
-		Indices logical_indices) {
-		index_t physical_index = 0;
+	MLITE_XINLINE index_t IndexNDTo1D(
+		Indices indices_nd) {
+		index_t index_1d = 0;
 		for (index_t i = 0; i < dims_; i++) {
-			CHECK_LT(logical_indices[i], shape_[i]) << "\
+			CHECK_LT(indices_nd[i], shape_[i]) << "\
 				Logical index along an axis should be smaller than dimension of that aixs";
-			physical_index += logical_indices[i] * strides_[i];
+			index_1d += indices_nd[i] * strides_[i];
 		}
-		return physical_index;
+		return index_1d;
 	}
 
 	/////////////////////////////////////////////////////////////////
 	/*! \set given indices with datum */
 	MLITE_XINLINE void Set(Indices indices, const DType& datum) {
-		index_t idx = IndexLogicalToPhysical(indices);
+		index_t idx = IndexNDTo1D(indices);
 		std::cout << idx << std::endl;
 		*(dptr_ + idx) = datum;
 	}
