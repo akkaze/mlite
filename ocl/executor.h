@@ -3,7 +3,7 @@
 
 #include "../base.h"
 #include "../logging.h"
-#include "tensor_ocl_inl.h"
+#include "tensor_ocl-inl.h"
 #if MLITE_IN_CXX11
 #include <unordered_map>
 #else
@@ -35,33 +35,48 @@ public:
 		//CHECK_NE(device_id_,0) << "Found 0 devices!";
 		// Create a compute context
 		// Create a command queue
-		commands_ = clCreateCommandQueue(context_, device_id_, 0, &err);
+		//commands_ = clCreateCommandQueue(context_, device_id_, 0, &err);
 	}
-	static const cl_context GetContext(const cl_device_id& dev_id) {
+	~Executor() {
+		for (Iterator it = dev2context_.begin(); it != dev2context_.end(); it++) {
+			clReleaseContext(it->second);
+		}
+	}
+	static cl_device_id GetDeviceId() {
+		return cur_dev_id_;
+	}
+	void SetDevice(const cl_device_id& dev_id) {
+		cur_dev_id_ = dev_id;
+	}
+	void ReleaseDevice(void) {
+		clReleaseDevice(cur_dev_id_);
+	}
+	static const cl_context GetContext() {
 		static Executor executor;
 		// fisrt check if context already exists
-		if (executor.dev2context_.find(dev_id) == executor.dev2context_.end()) {
+		if (executor.dev2context_.find(cur_dev_id_) == executor.dev2context_.end()) {
 			// Create a compute context
 			cl_int err;
 			cl_context context =
-				clCreateContext(NULL, 1, &dev_id, NULL, NULL, &err);
+				clCreateContext(NULL, 1, &cur_dev_id_, NULL, NULL, &err);
 			CHECK_NE(err, 0) << "Error during creating context";
 		}
-		Iterator it = executor.dev2context_.find(dev_id);
+		Iterator it = executor.dev2context_.find(cur_dev_id_);
 		return it->second;
 	}
 	void Run(const std::string& kernel_src,const std::string& kernel_name) {
 		cl_int err;
 		// Create the compute program from the source buffer
 		const char* kernel_src_cstr = kernel_src.c_str();
-		program_ = clCreateProgramWithSource(
-			context_, 1, (const char **)&kernel_src_cstr, NULL, &err);
+		cl_context context = dev2context_[cur_dev_id_];
+		cl_program program = clCreateProgramWithSource(
+			context, 1, (const char **)&kernel_src_cstr, NULL, &err);
 		CHECK_NE(err, 0) << "Error during creating program!";
 		// Build the program
-		err = clBuildProgram(program_, 0, NULL, NULL, NULL, NULL);
+		err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
 		CHECK_NE(err, 0) << "Error during building program!";
 		// Create the compute kernel from the program
-		clCreateKernel(program_, kernel_name.c_str(), &err);
+		clCreateKernel(program, kernel_name.c_str(), &err);
 		CHECK_NE(err, 0) << "Error during creating kernel!";
 
 	}
@@ -75,15 +90,13 @@ private:
 #if MLITE_IN_CXX11
 	std::unordered_map<cl_device_id, cl_context> dev2context_;
 	typedef std::unordered_map<cl_device_id, cl_context>::iterator Iterator;
+#else
+	std::map<cl_device_id, cl_context> dev2context_;
+	typedef std::map<cl_device_id, cl_context>::iterator Iterator;
 #endif
 	// compute device id
-	cl_device_id	device_id_; 
-	// compute context
-	cl_context       context_;  
-	// compute program
-	cl_program       program_;
-	// compute kernel
-	cl_kernel        kernel_;       
+	static thread_local cl_device_id	cur_dev_id_; 
 };
+thread_local cl_device_id Executor::cur_dev_id_ = kOclDefualtDeviceId;
 }
 #endif
