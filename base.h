@@ -22,6 +22,7 @@
 #include <numeric>
 #include <random>
 #include <type_traits>
+#include <thread>
 #ifdef _MSC_VER
 typedef signed char int8_t;
 typedef __int16 int16_t;
@@ -95,6 +96,7 @@ typedef unsigned __int64 uint64_t;
 /*!
 * \brief macro to decide existence of c++11 compiler
 */
+#define MLITE_IN_CXX11 1
 #ifndef MLITE_IN_CXX11
 #define MLITE_IN_CXX11 (defined(__GXX_EXPERIMENTAL_CXX0X__) ||\
                           __cplusplus >= 201103L || defined(_MSC_VER))

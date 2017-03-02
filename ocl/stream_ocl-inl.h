@@ -18,6 +18,9 @@ struct Stream<ocl> {
 		cl_context context = Executor::GetContext();
 		commands_queue_ = clCreateCommandQueue(context, cur_dev_id, 0, &err);
 	}
+	~Stream(void) {
+		clFinish(commands_queue_);
+	}
 	// compute command queue
 	cl_command_queue commands_queue_;
 };
