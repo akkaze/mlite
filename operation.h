@@ -2,7 +2,6 @@
 #define MLITE_OPERARION_H_
 #include <vector>
 #include "tensor.h"
-//#include "type_traits.h"
 
 #include "type_traits.h"
 namespace mlite {
@@ -39,6 +38,17 @@ public:
 	UnaryOperation(Tensor<xpu,DType>* src) : 
 		Operation<xpu,return_type, DType>({ src }) {}
 };
+template <typename xpu,
+	ReturnType return_type,
+	typename DType MLITE_DEFAULT_DTYPE>
+	class BinaryOperation : public Operation<xpu, return_type, DType> {
+	public:
+		BinaryOperation() = default;
+		~BinaryOperation() = default;
+		BinaryOperation(Tensor<xpu, DType>* operand1, 
+			Tensor<xpu, DType>* operand2) :
+			Operation<xpu, return_type, DType>({ operand1,operand2 }) {}
+};
 //@breif silce operation,take a tensor and ranges return subtensor
 template <typename xpu,
 	typename DType MLITE_DEFAULT_DTYPE>
@@ -52,7 +62,7 @@ public:
 		ranges_(ranges) {
 			CHECK_EQ(ranges.size(), operands_[0]->dims());
 		}
-	virtual Shape ReturnShape() {
+	const Shape& ReturnShape() {
 		dst_shape_.Resize(operands_[0]->dims());
 #pragma unroll
 		for (index_t i = 0; i < src.dims(); i++)
@@ -90,19 +100,36 @@ protected:
 	DType min_;
 	DType max_;
 };
+//@brief elementwise operation
 template <typename xpu,
-	ReturnType return_type,
 	typename DType, 
+	ReturnType return_type,
 	typename Op>
-class Map : UnaryOperation<xpu, return_type, DType> {
+class ElementWise : UnaryOperation<xpu, return_type, DType> {
 public:
-	Map() = default;
-	~Map() = default;
-	Map(Tensor<xpu,DType>* src): 
-		UnaryOperation<xpu, DType>(src),
-		return_type_(ReturnType::kSimple) {}
+	ElementWise() = default;
+	~ElementWise() = default;
+	ElementWise(Tensor<xpu,DType>* src):
+		UnaryOperation<xpu, DType>(src) {}
 	const Shape& ReturnShape() {
 		return operands_[0]->shape();
+	}
+};
+
+////////////////////////binary operations///////////////////////////////////
+//@breif matrix multiplication
+template <typename xpu,typename DType>
+class MatMul : BinaryOperation<xpu, ReturnType::kSimple, DType> {
+public:
+	MatMul() = default;
+	~MatMul() = default;
+	MatMul(Tensor<xpu, DType>* operand1,
+		Tensor<xpu, DType>* operand2) : 
+		BinaryOperation<xpu, ReturnType::kSimple, DType>(operand1,operand2) {
+		CHECK_EQ(operand1->dims(), 2) << "Tensor must be a matrix!";
+		CHECK_EQ(operand2->dims(), 2) << "Tensor must be a matrix!";
+		CHECK_EQ(operand1->dim_size(1), operand2->dim_size(0))
+			<< "column number of left matrix must equal to row number of right matrix!";
 	}
 };
 }

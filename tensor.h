@@ -7,6 +7,9 @@
 #include "./base.h"
 #include "./logging.h"
 
+#if MLITE_USE_OCL
+#include "ocl/executor.h"
+#endif
 namespace mlite {
 /*! \brief device name CPU */
 struct cpu {
@@ -22,7 +25,7 @@ struct gpu {
 	/*! \brief device flag number, identifies this device */
 	static const int kDevMask = 1 << 1;
 };
-
+/*! \brief device name OCL */
 struct ocl {
 	static const bool kDevCPU = false;
 	static const int kDevMask = 1 << 2;
@@ -400,7 +403,6 @@ public:
 			strides_[indices[i]] = orig_strides[i];
 		}
 	}
-	
 };
 template<typename Device>
 inline void InitTensorEngine(int device_id = 0);

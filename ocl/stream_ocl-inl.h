@@ -16,6 +16,7 @@ struct Stream<ocl> {
 		cl_int err;
 		cl_device_id cur_dev_id = Executor::GetDeviceId();
 		cl_context context = Executor::GetContext();
+		// Create a compute context
 		commands_queue_ = clCreateCommandQueue(context, cur_dev_id, 0, &err);
 	}
 	~Stream(void) {

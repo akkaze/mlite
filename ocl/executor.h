@@ -4,6 +4,9 @@
 #include "../base.h"
 #include "../logging.h"
 #include "tensor_ocl-inl.h"
+#include "../utils/format.h"
+
+#include <fstream>
 #if MLITE_IN_CXX11
 #include <unordered_map>
 #else
@@ -13,18 +16,7 @@ namespace mlite {
 class Executor {
 public:
 	Executor() {
-		cl_int err;
-		// Set up platform and GPU device
-		cl_uint num_platforms;
-		// Find number of platforms
-		CHECK_NE(clGetPlatformIDs(0, NULL, &num_platforms),CL_FALSE) 
-			<< "Error during Finding platforms!";
-		CHECK_NE(num_platforms, 0)
-			<< "Found 0 platforms!";
-		// Get all platforms
-		cl_platform_id *platform = new cl_platform_id[num_platforms];
-		CHECK_NE(clGetPlatformIDs(num_platforms, platform, NULL), CL_FALSE)
-			<< "Error during getting platforms!";
+		SetDevice(kOclDefualtDeviceId);
 		// Secure a GPU
 		//for (index_t i = 0; i < num_platforms; i++) {
 		//	err = clGetDeviceIDs(
@@ -33,7 +25,6 @@ public:
 		//		break;
 		//}
 		//CHECK_NE(device_id_,0) << "Found 0 devices!";
-		// Create a compute context
 		// Create a command queue
 		//commands_ = clCreateCommandQueue(context_, device_id_, 0, &err);
 	}
@@ -84,7 +75,27 @@ public:
 		static Executor executor;
 		return &executor;
 	}
-
+	std::string LoadPragram(const std::string& src_file) {
+		std::ifstream in;
+		in.read(src_file, std::ios::in);
+		CHECK_NOTNULL(in) << "Cannot read this file,check if this file name correct!";
+		return std::string(
+			std::istreambuf_iterator<char>(in),
+			(std::istreambuf_iterator<char>()));
+	}
+	std::string Inlcude(const std::string& src,
+		const std::string& include) {
+		std::string included;
+		included.append(include);
+		included.append("\n");
+		included.append(src);
+		return included;
+	}
+	std::string LoadParams(std::string& src,
+		const std::unordered_map<std::string, std::string>& param_from_to) {
+		StringReplace(src, param_from_to);
+		return src;
+	}
 private:
 	// map from device id to context
 #if MLITE_IN_CXX11
@@ -98,5 +109,24 @@ private:
 	static thread_local cl_device_id	cur_dev_id_; 
 };
 thread_local cl_device_id Executor::cur_dev_id_ = kOclDefualtDeviceId;
+static std::string kIndicesFunctions = "			\
+	uint indices_1d_to_nd(uint index_1d,uint tid) {			\
+	uint indices_nd[$dims$tid];							\
+	uint res_dim = index_1d;						\
+	for (uint i = $dims$tid - 1; i > 0; i--) {			\
+		indices_nd[i] = res_dim % $strides$tid[i];		\
+		res_dim /= $strides$tid[i];						\
+	}												\
+	indices_nd[0] = res_dim;						\
+	return indices_nd;								\
+	}												\
+	index_t index_nd_to_1d(							\
+		uint indices_nd[]) {						\
+		index_t index_1d = 0;						\
+		for (uint i = 0; i < $dims; i++) {			\
+			index_1d += indices_nd[i] * $strides[i];\
+		}											\
+		return index_1d;							\
+	}";
 }
 #endif
