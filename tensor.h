@@ -392,7 +392,6 @@ public:
 	/*! \set given indices with datum */
 	MLITE_XINLINE void Set(Indices indices, const DType& datum) {
 		index_t idx = IndexNDTo1D(indices);
-		std::cout << idx << std::endl;
 		*(dptr_ + idx) = datum;
 	}
 	MLITE_XINLINE void Reshape(const Shape& dst_shape) {
