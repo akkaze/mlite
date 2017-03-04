@@ -2,6 +2,7 @@
 #define MLITE_OCL_TENSOR_INL_H_
 #include "../base.h"
 #include "../tensor.h"
+#include "stream_ocl-inl.h"
 #include "executor.h"
 namespace mlite {
 static cl_device_id kOclDefualtDeviceId = 0;
@@ -30,12 +31,12 @@ MLITE_XINLINE void SetDevice<ocl>(int devid) {
 	Executor::Get()->SetDevice(&dev_id);
 }
 template<>
-inline Stream<cpu> *NewStream<ocl>(bool create_blas_handle,
+inline Stream<ocl> *NewStream<ocl>(bool create_blas_handle,
 	bool create_dnn_handle) {
 	return new Stream<ocl>();
 }
 template<>
-MLITE_XINLINE void DeleteStream<ocl>(Stream<ocl> *stream) {
+void DeleteStream<ocl>(Stream<ocl> *stream) {
 	delete stream;
 }
 template<typename DType>
@@ -47,7 +48,7 @@ MLITE_XINLINE void AllocSpace(Tensor<ocl, DType> *obj) {
 	CHECK_NE(err, CL_FALSE) << "Error allocting device memory!";
 }
 template<typename DType>
-MLITE_XINLINE void FreeSpace(Tensor<cpu, DType> *obj) {
+MLITE_XINLINE void FreeSpace(Tensor<ocl, DType> *obj) {
 	clReleaseMemObject(obj->cl_data());
 }
 inline void CheckLaunchParam() {}

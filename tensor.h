@@ -262,25 +262,43 @@ public:
 	Stream<Device> *stream_;
 	size_t dims_;
 	MLITE_XINLINE Tensor(void) : stream_(NULL) {
+#if MLITE_USE_OCL
+		this->CreateOCLArgs();
+#endif
 	}
 	MLITE_XINLINE Tensor(const Shape& shape)
 		: dims_(shape.dims()), shape_(shape), stream_(NULL) {
 		this->GetStrides();
+#if MLITE_USE_OCL
+		this->CreateOCLArgs();
+#endif
 	}
 	MLITE_XINLINE Tensor(DType *dptr, const Shape& shape)
 		: dptr_(dptr), dims_(shape.dims()), shape_(shape),stream_(NULL) {
 		this->GetStrides();
+#if MLITE_USE_OCL
+		this->CreateOCLArgs();
+#endif
 	}
 	MLITE_XINLINE Tensor(DType *dptr, const Shape& shape,
 		Stream<Device> *stream)
 		: dptr_(dptr), dims_(shape.dims()), shape_(shape), stream_(stream) {
 		this->GetStrides();
+#if MLITE_USE_OCL
+		this->CreateOCLArgs();
+#endif	
 	}
 	MLITE_XINLINE Tensor(DType *dptr,
 		const Shape &shape,
 		index_t stride, Stream<Device> *stream)
 		: dptr_(dptr), dims_(shape.dims()), shape_(shape), stream_(stream) {
 		this->GetStrides();
+#if MLITE_USE_OCL
+		this->CreateOCLArgs();
+#endif	
+	}
+	MLITE_XINLINE ~Tensor() {
+
 	}
 	/////////////////////getters////////////////////////////
 	MLITE_XINLINE DType* data() const {
@@ -289,12 +307,6 @@ public:
 #if MLITE_USE_OCL
 	MLITE_XINLINE const cl_mem& cl_data() const {
 		return cl_data_;
-	}
-	MLITE_XINLINE void SetOCLArgs(void) {
-		cl_int err;
-		cl_shape_ = clCreateBuffer(
-			context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-			obj->size() * sizeof(index_t), NULL, &err);
 	}
 #endif
 	MLITE_XINLINE DType* dptr(const index_t idx) const {
@@ -355,7 +367,7 @@ public:
 	MLITE_XINLINE void set_dptr(DType* dptr) {
 		dptr_ = dptr;
 	}
-#ifdef MLITE_USE_OCL
+#if MLITE_USE_OCL
 	MLITE_XINLINE void set_cl_data(const cl_mem& cl_data) {
 		cl_data_ = cl_data;
 	}
@@ -363,6 +375,21 @@ public:
 	MLITE_XINLINE void set_stream(Stream<Device>* stream) {
 		stream_ = stream;
 	}
+#if MLITE_USE_OCL
+	MLITE_XINLINE void CreateOCLArgs(void) {
+		cl_int err;
+		cl_shape_ = clCreateBuffer(
+			context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+			dims_ * sizeof(index_t), NULL, &err);
+		cl_strides_ = clCreateBuffer(
+			context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+			dims_ * sizeof(index_t), NULL, &err);
+	}
+	MLITE_XINLINE void ReleaseOCLArgs(void) {
+		clReleaseMemObject(cl_shape_);
+		clReleaseMemObject(cl_strides_);
+	}
+#endif
 	///////////////////////index utilities////////////////////////////////
 	MLITE_XINLINE Indices Index1DToND(
 		const index_t& physical_index) {

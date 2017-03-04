@@ -6,6 +6,7 @@
 #include "tensor_ocl-inl.h"
 #include "executor.h"
 namespace mlite {
+template<>
 struct Stream<ocl> {
 	/*! \brief handle state */
 	enum HandleState {
