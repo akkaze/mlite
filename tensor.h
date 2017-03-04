@@ -7,9 +7,6 @@
 #include "./base.h"
 #include "./logging.h"
 
-#if MLITE_USE_OCL
-#include "ocl/executor.h"
-#endif
 namespace mlite {
 /*! \brief device name CPU */
 struct cpu {
@@ -256,6 +253,8 @@ public:
 	static const bool kDevCPU = Device::kDevCPU;
 #if MLITE_USE_OCL
 	cl_mem cl_data_;
+	cl_mem cl_shape_;
+	cl_mem cl_strides_;
 #endif
 	DType *dptr_;
 	Shape shape_;
@@ -283,13 +282,19 @@ public:
 		: dptr_(dptr), dims_(shape.dims()), shape_(shape), stream_(stream) {
 		this->GetStrides();
 	}
-	///////////////getters////////////////////////////
+	/////////////////////getters////////////////////////////
 	MLITE_XINLINE DType* data() const {
 		return dptr_;
 	}
-#ifdef MLITE_USE_OCL
+#if MLITE_USE_OCL
 	MLITE_XINLINE const cl_mem& cl_data() const {
 		return cl_data_;
+	}
+	MLITE_XINLINE void SetOCLArgs(void) {
+		cl_int err;
+		cl_shape_ = clCreateBuffer(
+			context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+			obj->size() * sizeof(index_t), NULL, &err);
 	}
 #endif
 	MLITE_XINLINE DType* dptr(const index_t idx) const {
@@ -358,7 +363,7 @@ public:
 	MLITE_XINLINE void set_stream(Stream<Device>* stream) {
 		stream_ = stream;
 	}
-	///////////////////////////////////////////////////////
+	///////////////////////index utilities////////////////////////////////
 	MLITE_XINLINE Indices Index1DToND(
 		const index_t& physical_index) {
 		CHECK_LT(physical_index, shape_.Size()) << "\
@@ -421,6 +426,8 @@ template<typename Device>
 inline void DeleteStream(Stream<Device> *stream);
 template<typename DType>
 inline void FreeSpace(Tensor<cpu, DType> *obj);
+template<typename DType>
+inline void FreeSpace(Tensor<ocl, DType> *obj);
 template<typename DType>
 inline void FreeSpace(Tensor<gpu, DType> *obj);
 template<typename Device, typename DType>
