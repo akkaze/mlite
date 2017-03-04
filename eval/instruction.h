@@ -3,8 +3,9 @@
 #include <vector>
 #include "variable.h"
 
-#include "tensor.h"
-#include "logging.h"
+#include "../base.h"
+#include "../tensor.h"
+#include "../logging.h"
 
 using namespace	mlite;
 namespace eval {

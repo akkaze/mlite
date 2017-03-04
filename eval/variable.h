@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "tensor.h"
+#include "../tensor.h"
 
 using namespace mlite;
 namespace eval {

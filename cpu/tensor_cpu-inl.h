@@ -4,8 +4,8 @@
 #include <functional>
 #include <utility>
 #include <vector>
-#include "./base.h"
-#include "./tensor.h"
+#include "../base.h"
+#include "../tensor.h"
 namespace mlite {
 template<>
 MLITE_XINLINE void InitTensorEngine<cpu>(int dev_id){
@@ -28,7 +28,7 @@ MLITE_XINLINE void DeleteStream<cpu>(Stream<cpu> *stream) {
 template<typename DType>
 MLITE_XINLINE void AllocSpace(Tensor<cpu, DType> *obj) {
 	obj->set_dptr(reinterpret_cast<DType*>(
-		malloc(obj->shape_.Size() * sizeof(DType))));
+		malloc(obj->size() * sizeof(DType))));
 }
 template<typename Device,typename DType>
 MLITE_XINLINE Tensor<Device, DType>
@@ -80,7 +80,7 @@ MLITE_XINLINE Tensor<cpu, DType> ReduceOverAxis(
 	index_t dst_id = 0;
 	Indices dst_indices;
 	for(dst_id = 0; dst_id < dst.size(); dst_id++) {
-		dst.IndexPhysicalToLogical(dst_id, dst_indices);
+		dst.Index1DToND(dst_id, dst_indices);
 		index_t src_indices[dim];
 		for (index_t i = 0; i < src.shape_[axis]; i++) {
 			for (index_t j = 0; j < dim; j++) {
@@ -92,7 +92,7 @@ MLITE_XINLINE Tensor<cpu, DType> ReduceOverAxis(
 					src_indices[j] = dst_indices[j + 1];
 			}
 			index_t src_id = 0;
-			src.IndexLogicalToPhysical(src_id, src_indices);
+			src.IndexNDTo1D(src_id, src_indices);
 			*(dst.dptr_ + dst_id) = 
 				Op()(*(dst.dptr_ + dst_id),*(src.dptr_ + src_id));
 		}
