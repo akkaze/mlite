@@ -376,8 +376,10 @@ public:
 		stream_ = stream;
 	}
 #if MLITE_USE_OCL
+#include "ocl/executor.h"
 	MLITE_XINLINE void CreateOCLArgs(void) {
 		cl_int err;
+		cl_context context = Executor::GetContext();
 		cl_shape_ = clCreateBuffer(
 			context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
 			dims_ * sizeof(index_t), NULL, &err);

@@ -20,6 +20,12 @@ struct is_not_inplace {
 };
 MLITE_DECLARE_TRAITS(is_not_inplace, ReturnType::kInplace, false);
 
+template<typename Device>
+struct is_ocl {
+	static const bool value = true;
+};
+MLITE_DECLARE_TRAITS(is_ocl, cpu, false);
+MLITE_DECLARE_TRAITS(is_ocl, gpu, false);
 //@brief simple enable_if implementation,here we don't trigger SFINAE but typedef void
 template<bool Cond,typename T>
 struct enable_if { typedef T type; };

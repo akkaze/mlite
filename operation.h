@@ -1,8 +1,9 @@
 #ifndef MLITE_OPERATION_H_
 #define MLITE_OPERARION_H_
 #include <vector>
-#include "tensor.h"
+#include <type_traits>
 
+#include "tensor.h"
 #include "type_traits.h"
 namespace mlite {
 template <typename xpu,
@@ -19,6 +20,11 @@ public:
 		is_not_inplace<return_type>::value, 
 		std::add_lvalue_reference<Shape>::type>::type 
 		ReturnShape() = 0;
+#if MLITE_USE_OCL
+	virtual typename enable_if<
+		is_ocl<xpu>::value,std::string>::type
+		OCLCodeGen();
+#endif
 	virtual void Execute(Tensor<xpu, DType>*) = 0;
 	///////////////////////getters//////////////////////////////
 	const ReturnType& get_return_type() const {

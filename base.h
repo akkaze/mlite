@@ -23,6 +23,7 @@
 #include <random>
 #include <type_traits>
 #include <thread>
+#include <fstream>
 #ifdef _MSC_VER
 typedef signed char int8_t;
 typedef __int16 int16_t;
