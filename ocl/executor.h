@@ -4,25 +4,38 @@
 #include <unordered_map>
 #include "../base.h"
 #include "../logging.h"
-//#include "../utils/format.h"
+#include "../utils/format.h"
 namespace mlite {
 class Executor {
 public:
 	Executor() {
-		//SetDevice(kOclDefualtDeviceId);
+		cl_int err;
+		// Set up platform and GPU device
+		cl_uint num_platforms;
+		// Find number of platforms
+		err = clGetPlatformIDs(0, NULL, &num_platforms);
+		CHECK_EQ(err, CL_SUCCESS)
+			<< "Error during Finding platforms!";
+		CHECK_NE(num_platforms, 0)
+			<< "Found 0 platforms!";
+		// Get all platforms
+		cl_platform_id *platform = new cl_platform_id[num_platforms];
+		err = clGetPlatformIDs(num_platforms, platform, NULL);
+		CHECK_EQ(err, CL_SUCCESS)
+			<< "Error during getting platforms!";
 		// Secure a GPU
-		//for (index_t i = 0; i < num_platforms; i++) {
-		//	err = clGetDeviceIDs(
-		//		platform[i], CL_DEVICE_TYPE_DEFAULT, 1, &device_id_, NULL);
-		//	if (err == CL_SUCCESS) 
-		//		break;
-		//}
-		//CHECK_NE(device_id_,0) << "Found 0 devices!";
+		for (index_t i = 0; i < num_platforms; i++) {
+			err = clGetDeviceIDs(
+				platform[i], CL_DEVICE_TYPE_DEFAULT, 1, &cur_dev_id_, NULL);
+			if (err == CL_SUCCESS) 
+				break;
+		}
+		CHECK_NE(cur_dev_id_,0) << "Found 0 devices!";
 		// Create a command queue
-		//commands_ = clCreateCommandQueue(context_, device_id_, 0, &err);
+		SetDevice(cur_dev_id_);
+		delete[] platform;
 	}
 	~Executor() {
-		typedef std::unordered_map<cl_device_id, cl_context>::iterator Iterator;
 		for (Iterator it = dev2context_.begin(); it != dev2context_.end(); it++) {
 			clReleaseContext(it->second);
 		}
@@ -44,7 +57,8 @@ public:
 			cl_int err;
 			cl_context context =
 				clCreateContext(NULL, 1, &cur_dev_id_, NULL, NULL, &err);
-			CHECK_NE(err, 0) << "Error during creating context";
+			executor.dev2context_.insert(std::make_pair(cur_dev_id_, context));
+			CHECK_EQ(err, CL_SUCCESS) << "Error during creating context";
 		}
 		Iterator it = executor.dev2context_.find(cur_dev_id_);
 		return it->second;
@@ -93,10 +107,10 @@ public:
 private:
 	// map from device id to context
 	std::unordered_map<cl_device_id, cl_context> dev2context_;
-
+	typedef std::unordered_map<cl_device_id, cl_context>::iterator Iterator;
 	// compute device id
 	static thread_local cl_device_id	cur_dev_id_;
 };
-thread_local cl_device_id Executor::cur_dev_id_ = kOclDefualtDeviceId;
+thread_local cl_device_id Executor::cur_dev_id_ = NULL;
 }
 #endif

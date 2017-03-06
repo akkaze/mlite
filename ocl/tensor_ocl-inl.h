@@ -5,7 +5,6 @@
 #include "stream_ocl-inl.h"
 #include "executor.h"
 namespace mlite {
-static cl_device_id kOclDefualtDeviceId = 0;
 template<>
 MLITE_XINLINE void InitTensorEngine<ocl>(int dev_id) {
 	cl_int err;

@@ -3,10 +3,11 @@
 #include <string>
 #include <vector>
 #include <initializer_list>
+#include <unordered_map>
 #include <iostream>
 #include "./base.h"
 #include "./logging.h"
-
+#include "ocl/executor.h"
 namespace mlite {
 /*! \brief device name CPU */
 struct cpu {
@@ -255,6 +256,7 @@ public:
 	cl_mem cl_data_;
 	cl_mem cl_shape_;
 	cl_mem cl_strides_;
+	cl_mem cl_dims_;
 #endif
 	DType *dptr_;
 	Shape shape_;
@@ -262,43 +264,39 @@ public:
 	Stream<Device> *stream_;
 	size_t dims_;
 	MLITE_XINLINE Tensor(void) : stream_(NULL) {
-#if MLITE_USE_OCL
-		this->CreateOCLArgs();
-#endif
+		if(is_ocl<Device>::value)
+			this->CreateOCLArgs();
 	}
 	MLITE_XINLINE Tensor(const Shape& shape)
 		: dims_(shape.dims()), shape_(shape), stream_(NULL) {
 		this->GetStrides();
-#if MLITE_USE_OCL
-		this->CreateOCLArgs();
-#endif
+		if (is_ocl<Device>::value)
+			this->CreateOCLArgs();
 	}
 	MLITE_XINLINE Tensor(DType *dptr, const Shape& shape)
 		: dptr_(dptr), dims_(shape.dims()), shape_(shape),stream_(NULL) {
 		this->GetStrides();
-#if MLITE_USE_OCL
-		this->CreateOCLArgs();
-#endif
+		if (is_ocl<Device>::value)
+			this->CreateOCLArgs();
 	}
 	MLITE_XINLINE Tensor(DType *dptr, const Shape& shape,
 		Stream<Device> *stream)
 		: dptr_(dptr), dims_(shape.dims()), shape_(shape), stream_(stream) {
 		this->GetStrides();
-#if MLITE_USE_OCL
-		this->CreateOCLArgs();
-#endif	
+		if (is_ocl<Device>::value)
+			this->CreateOCLArgs();
 	}
 	MLITE_XINLINE Tensor(DType *dptr,
 		const Shape &shape,
 		index_t stride, Stream<Device> *stream)
 		: dptr_(dptr), dims_(shape.dims()), shape_(shape), stream_(stream) {
 		this->GetStrides();
-#if MLITE_USE_OCL
-		this->CreateOCLArgs();
-#endif	
+		if (is_ocl<Device>::value)
+			this->CreateOCLArgs();
 	}
 	MLITE_XINLINE ~Tensor() {
-
+		if (is_ocl<Device>::value)
+			this->ReleaseOCLArgs();
 	}
 	/////////////////////getters////////////////////////////
 	MLITE_XINLINE DType* data() const {
@@ -376,7 +374,6 @@ public:
 		stream_ = stream;
 	}
 #if MLITE_USE_OCL
-#include "ocl/executor.h"
 	MLITE_XINLINE void CreateOCLArgs(void) {
 		cl_int err;
 		cl_context context = Executor::GetContext();
@@ -386,6 +383,7 @@ public:
 		cl_strides_ = clCreateBuffer(
 			context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
 			dims_ * sizeof(index_t), NULL, &err);
+
 	}
 	MLITE_XINLINE void ReleaseOCLArgs(void) {
 		clReleaseMemObject(cl_shape_);
