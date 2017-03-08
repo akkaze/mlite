@@ -5,7 +5,7 @@
 #if CUDA_VERSION >= 7000
 #include <thrust/system/cuda/execution_policy.h>
 #endif
-#include "tensor.h"
+#include "../tensor.h"
 #define MLITE_CUDA_POST_KERNEL_CHECK(x) \
   /* Code block avoids redefinition of cudaError_t err */ \
   do { \

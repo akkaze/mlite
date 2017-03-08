@@ -21,7 +21,7 @@ public:
 		std::add_lvalue_reference<Shape>::type>::type 
 		ReturnShape() = 0;
 #if MLITE_USE_OCL
-	virtual typename enable_if<
+	 typename enable_if<
 		is_ocl<xpu>::value,std::string>::type
 		OCLCodeGen();
 #endif
@@ -136,6 +136,9 @@ public:
 		CHECK_EQ(operand2->dims(), 2) << "Tensor must be a matrix!";
 		CHECK_EQ(operand1->dim_size(1), operand2->dim_size(0))
 			<< "column number of left matrix must equal to row number of right matrix!";
+	}
+	const Shape& ReturnShape() {
+		return Shape({ operands_[0].dim_size(0),operands_[1].dim.size() });
 	}
 };
 }

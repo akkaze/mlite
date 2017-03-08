@@ -136,7 +136,7 @@ struct Shape {
 		if (shape_)
 			delete[] shape_;
 	}
-	MLITE_XINLINE Shape(const std::initializer_list<int>& init_list) : Shape() {
+	MLITE_XINLINE Shape(const std::initializer_list<index_t>& init_list) : Shape() {
 		this->Resize(init_list.size());
 		index_t idx = 0;
 		for (auto& item : init_list) {
@@ -330,7 +330,7 @@ public:
 		}
 		return memsz;
 	}
-	MLITE_XINLINE size_t dim_size(index_t idx) const {
+	MLITE_XINLINE index_t dim_size(index_t idx) const {
 		return shape_[idx];
 	}
 	MLITE_XINLINE Tensor<Device, DType> FlatTo1D(void) const {
@@ -372,6 +372,9 @@ public:
 #endif
 	MLITE_XINLINE void set_stream(Stream<Device>* stream) {
 		stream_ = stream;
+	}
+	MLITE_XINLINE void set_shape(const Shape shape) {
+		shape_ = shape;
 	}
 #if MLITE_USE_OCL
 	MLITE_XINLINE void CreateOCLArgs(void) {
