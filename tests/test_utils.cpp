@@ -1,6 +1,6 @@
-#include "base.h"
-#include "utils\shared_ptr.h"
-#include "utils\timer.h"
+#include "../base.h"
+#include "../utils/shared_ptr.h"
+#include "../utils/timer.h"
 using namespace mlite;
 void TestSharedPtr() {
 	shared_ptr<int> p(new int(2));

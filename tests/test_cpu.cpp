@@ -1,8 +1,8 @@
-#include "logging.h"
-#include "base.h"
-#include "tensor.h"
-#include "cpu/tensor_cpu-inl.h"
-#include "cpu/operation_cpu.h"
+#include "../logging.h"
+#include "../base.h"
+#include "../tensor.h"
+#include "../cpu/tensor_cpu-inl.h"
+#include "../cpu/operation_cpu.h"
 using namespace mlite;
 template <typename DType>
 class AddOne {
