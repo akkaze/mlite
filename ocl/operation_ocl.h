@@ -21,36 +21,42 @@ public:
 			<< "column number of left matrix must equal to row number of right matrix!";
 	}
 	void Execute(Tensor<ocl, DType>* dst) {
-		std::string matmul_kernel_src = "										\
-#define TILE_DIM 32																\
-			__kernel MatMulKernel(__global float* mat1,							\
-				__global uint* shape1,											\
-				__global float *mat2,											\
-				__global uint* shape2,											\
-				__global float* mat3) {											\
-			__local float ds_M[TILE_DIM][TILE_DIM];								\
-			__local float ds_N[TILE_DIM][TILE_DIM];								\
-			int c = get_global_id(0);											\
-			int r = get_global_id(1);											\
-			int tx = get_local_id(0);											\
-			int ty = get_local_id(1);											\
-			float dst = 0;														\
-			for (int m = 0; m < shape1[0] / TILE_DIM + 1; m++) {				\
-				if (r < shape1[1] && m * TILE_DIM + tx < shape1[1])				\
-					ds_M[ty][tx] = mat1[r * shape1[0] + m * TILE_DIM * tx];		\
-				else															\
-					ds_M[ty][tx] = 0;											\
-				if (c < shape2[0] && m * TILE_DIM + ty < shape2[0])				\
-					ds_N[ty][tx] = mat2[(m * TILE_DIM + ty) * shape2[0] + c];	\
-				else															\
-					ds_M[ty][tx] = 0;											\
-				barrier(CLK_LOCAL_MEM_FENCE);									\
-				for (int k = 0; k < TILE_DIM; k++)								\
-					dst += ds_M[ty][k] * ds_N[k][tx];							\
-				barrier(CLK_LOCAL_MEM_FENCE);									\
-			}																	\
-			if (r < shape2[1] && c < shape1[0])									\
-				c[r * shape1[0] + col]	= dst;									\
+		std::string matmul_kernel_src = " \
+#define block_size $BLOCK_SIZE \
+			__kernel __attribute__((reqd_work_group_size(block_size, block_size, 1))) \
+			void matmul( \
+				__global const float * A, \
+				__global const unsigned* A_shp, \
+				__global const float * B, \
+				__global const unsigned* B_shp, \
+				__global float * C) { \
+			__local float bufA[block_size][block_size]; \
+			__local float bufB[block_size][block_size]; \
+			unsigned int row_block_id = get_group_id(0); \
+			unsigned int col_block_id = get_group_id(1); \
+			unsigned int row_thread_id = get_local_id(0); \
+			unsigned int col_thread_id = get_local_id(1); \
+			unsigned int row_id = get_global_id(0); \
+			unsigned int col_id = get_global_id(1); \
+			unsigned  int block_num = (A_shp[1] + block_size - 1) / block_size; \
+			float Csub = 0; \
+			for (unsigned int block = 0; block < block_num; block++) { \
+				if (row_id < A_shp[0] && block * block_size + col_thread_id  < A_shp[1]) \
+					bufA[row_thread_id][col_thread_id] = A[row_id * A_shp[1] + block * block_size + col_thread_id]; \
+				else \
+					bufA[row_thread_id][col_thread_id] = 0; \
+				if (col_id < B_shp[1] && block * block_size + row_thread_id < B_shp[0]) \
+					bufB[row_thread_id][col_thread_id] = B[(block * block_size + row_thread_id) * B_shp[1] + col_id]; \
+				else \
+					bufB[row_thread_id][col_thread_id] = 0; \
+				barrier(CLK_LOCAL_MEM_FENCE); \
+				for (unsigned int thread = 0; thread < block_size; thread++) \
+					Csub += bufA[row_thread_id][thread] * bufB[thread][col_thread_id]; \
+				barrier(CLK_LOCAL_MEM_FENCE); \
+			} \
+			if (row_id < A_shp[0] && col_id < B_shp[1]) \
+				C[row_id * B_shp[1] + col_id] = Csub; \
+		} \
 		}";
 	}
 };
