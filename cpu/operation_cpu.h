@@ -76,17 +76,17 @@ public:
 		CHECK_EQ(operand1->dim_size(1), operand2->dim_size(0))
 			<< "column number of left matrix must equal to row number of right matrix!";
 	}
-	Shape& ReturnShape() {
+	Shape ReturnShape() {
 		return Shape({ operands_[0]->dim_size(0),operands_[1]->dim_size(1) });
 	}
 	void Execute(Tensor<cpu, DType>* dst) {
 #pragma omp parallel for
 		for (index_t r = 0; r < dst->dim_size(0); r++) {
-			for (index_t c = 0; c < dst->dim_size(1); r++) {
+			for (index_t c = 0; c < dst->dim_size(1); c++) {
 				index_t dst_idx = dst->IndexNDTo1D({ r, c });
 				for (index_t m = 0; m < operands_[0]->dim_size(1); m++) {
-					index_t operand0_idx = operands_[0]->IndexNDTo1D({ c, m });
-					index_t operand1_idx = operands_[1]->IndexNDTo1D({ m, r });
+					index_t operand0_idx = operands_[0]->IndexNDTo1D({ r, m });
+					index_t operand1_idx = operands_[1]->IndexNDTo1D({ m, c });
 					*(dst->dptr(dst_idx)) += *(operands_[0]->dptr(operand0_idx)) *
 						*(operands_[1]->dptr(operand1_idx));
 				}

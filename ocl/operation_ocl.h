@@ -20,18 +20,18 @@ public:
 		CHECK_EQ(operand1->dim_size(1), operand2->dim_size(0))
 			<< "column number of left matrix must equal to row number of right matrix!";
 	}
-	void Execute(Tensor<ocl, DType>* dst) {
+	string OCLCodeGen() {
 		std::string matmul_kernel_src = " \
 #define block_size $BLOCK_SIZE \
 			__kernel __attribute__((reqd_work_group_size(block_size, block_size, 1))) \
 			void matmul( \
-				__global const float * A, \
+				__global const $DType * A, \
 				__global const unsigned* A_shp, \
-				__global const float * B, \
+				__global const $DType * B, \
 				__global const unsigned* B_shp, \
-				__global float * C) { \
-			__local float bufA[block_size][block_size]; \
-			__local float bufB[block_size][block_size]; \
+				__global $DType * C) { \
+			__local $DType bufA[block_size][block_size]; \
+			__local $DType bufB[block_size][block_size]; \
 			unsigned int row_block_id = get_group_id(0); \
 			unsigned int col_block_id = get_group_id(1); \
 			unsigned int row_thread_id = get_local_id(0); \
@@ -39,7 +39,7 @@ public:
 			unsigned int row_id = get_global_id(0); \
 			unsigned int col_id = get_global_id(1); \
 			unsigned  int block_num = (A_shp[1] + block_size - 1) / block_size; \
-			float Csub = 0; \
+			$DType Csub = 0; \
 			for (unsigned int block = 0; block < block_num; block++) { \
 				if (row_id < A_shp[0] && block * block_size + col_thread_id  < A_shp[1]) \
 					bufA[row_thread_id][col_thread_id] = A[row_id * A_shp[1] + block * block_size + col_thread_id]; \
@@ -58,6 +58,10 @@ public:
 				C[row_id * B_shp[1] + col_id] = Csub; \
 		} \
 		}";
+		
+	}
+	void Execute(Tensor<ocl, DType>* dst) {
+		
 	}
 };
 }

@@ -17,8 +17,7 @@ public:
 		operands_ = operands;
 	}
 	virtual typename enable_if<
-		is_not_inplace<return_type>::value, 
-		std::add_lvalue_reference<Shape>::type>::type 
+		is_not_inplace<return_type>::value, Shape>::type 
 		ReturnShape() = 0;
 #if MLITE_USE_OCL
 	 typename enable_if<

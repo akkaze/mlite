@@ -2,9 +2,13 @@
 #define MLITE_OCL_EXECUTOR_H_
 
 #include <unordered_map>
+
 #include "../base.h"
+#include "../tensor.h"
 #include "../logging.h"
 #include "../utils/format.h"
+
+
 namespace mlite {
 class Executor {
 public:
@@ -63,7 +67,7 @@ public:
 		Iterator it = executor.dev2context_.find(cur_dev_id_);
 		return it->second;
 	}
-	void Run(const std::string& kernel_src, const std::string& kernel_name) {
+	cl_kernel Complie(const std::string& kernel_src, const std::string& kernel_name) {
 		cl_int err;
 		// Create the compute program from the source buffer
 		const char* kernel_src_cstr = kernel_src.c_str();
@@ -75,10 +79,30 @@ public:
 		err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
 		CHECK_NE(err, 0) << "Error during building program!";
 		// Create the compute kernel from the program
-		clCreateKernel(program, kernel_name.c_str(), &err);
+		cl_kernel kernel = clCreateKernel(program, kernel_name.c_str(), &err);
 		CHECK_NE(err, 0) << "Error during creating kernel!";
+		return kernel;
+	}
+	void Run(const cl_kernel& kernel,
+		const std::vector<size_t>& data_size,
+		const std::vector<size_t>& local_size) {
+		cl_int err;
+		CHECK_EQ(data_size.size(),local_size.size()) 
+			<< "data must have same dimension with block";
+		std::vector<size_t> global_size(data_size.size());
+		for (index_t i = 0; i < data_size.size(); i++)
+			global_size[i] = (data_size[i] + local_size[i] - 1) / local_size[i];
 
 	}
+	//void RegisterStream(Stream<ocl>* stream) {
+	//	dev2stream_.insert(std::make_pair(cur_dev_id_, stream));
+	//}
+	//Stream<ocl>* GetStream() {
+	//	std::unordered_map<cl_device_id, Stream<ocl>*>::const_iterator cit =
+	//		dev2stream_.find(cur_dev_id_);
+	//	CHECK_NE(cit, dev2stream_.end());
+	//	return *cit;
+	//}
 	static Executor* Get() {
 		static Executor executor;
 		return &executor;
@@ -105,12 +129,15 @@ public:
 		return src;
 	}
 private:
+	static index_t warp_size_;
 	// map from device id to context
 	std::unordered_map<cl_device_id, cl_context> dev2context_;
+	//std::unordered_map<cl_device_id, Stream<ocl>*> dev2stream_;
 	typedef std::unordered_map<cl_device_id, cl_context>::iterator Iterator;
 	// compute device id
 	static thread_local cl_device_id	cur_dev_id_;
 };
+index_t Executor::warp_size_ = 16;
 thread_local cl_device_id Executor::cur_dev_id_ = NULL;
 }
 #endif
