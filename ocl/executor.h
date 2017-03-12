@@ -2,9 +2,8 @@
 #define MLITE_OCL_EXECUTOR_H_
 
 #include <unordered_map>
-
+#include <memory>
 #include "../base.h"
-#include "../tensor.h"
 #include "../logging.h"
 #include "../utils/format.h"
 
@@ -94,15 +93,15 @@ public:
 			global_size[i] = (data_size[i] + local_size[i] - 1) / local_size[i];
 
 	}
-	//void RegisterStream(Stream<ocl>* stream) {
-	//	dev2stream_.insert(std::make_pair(cur_dev_id_, stream));
-	//}
-	//Stream<ocl>* GetStream() {
-	//	std::unordered_map<cl_device_id, Stream<ocl>*>::const_iterator cit =
-	//		dev2stream_.find(cur_dev_id_);
-	//	CHECK_NE(cit, dev2stream_.end());
-	//	return *cit;
-	//}
+	void RegisterCmdQueue(const std::shared_ptr<cl_command_queue>& queue) {
+		dev2queue_.insert(std::make_pair(cur_dev_id_, queue));
+	}
+	const std::shared_ptr<cl_command_queue>& GetCmdQueue() {
+		std::unordered_map<cl_device_id, std::shared_ptr<cl_command_queue>>::const_iterator
+			cit = dev2queue_.find(cur_dev_id_);
+		CHECK_NE(cit, dev2queue_.end());
+		return cit->second;
+	}
 	static Executor* Get() {
 		static Executor executor;
 		return &executor;
@@ -132,7 +131,7 @@ private:
 	static index_t warp_size_;
 	// map from device id to context
 	std::unordered_map<cl_device_id, cl_context> dev2context_;
-	//std::unordered_map<cl_device_id, Stream<ocl>*> dev2stream_;
+	std::unordered_map<cl_device_id, std::shared_ptr<cl_command_queue>> dev2queue_;
 	typedef std::unordered_map<cl_device_id, cl_context>::iterator Iterator;
 	// compute device id
 	static thread_local cl_device_id	cur_dev_id_;
