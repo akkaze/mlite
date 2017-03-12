@@ -3,6 +3,8 @@
 
 #include <unordered_map>
 #include <memory>
+#include <typeinfo>
+#include <typeindex>
 #include "../base.h"
 #include "../logging.h"
 #include "../utils/format.h"
@@ -122,12 +124,19 @@ public:
 		included.append(src);
 		return included;
 	}
-	std::string LoadParams(std::string& src,
+
+	template <typename DType>
+	void ReplaceTemplateParams(std::string& src) {
+		std::string dtype_name = type_names[std::type_index(typeid(DType))];
+		StringReplace(src, { {"DType",dtype_name} });
+	}
+	void LoadParams(std::string& src,
 		const std::unordered_map<std::string, std::string>& param_from_to) {
-		//StringReplace(src, param_from_to);
-		return src;
+		StringReplace(src, param_from_to);
 	}
 private:
+	//typenames
+	static std::unordered_map<std::type_index, std::string> type_names;
 	static index_t warp_size_;
 	// map from device id to context
 	std::unordered_map<cl_device_id, cl_context> dev2context_;
@@ -136,7 +145,18 @@ private:
 	// compute device id
 	static thread_local cl_device_id	cur_dev_id_;
 };
+std::unordered_map<std::type_index, std::string> Executor::type_names = 
+	std::unordered_map<std::type_index, std::string>{
+		{ std::type_index(typeid(short)),"short" },
+		{ std::type_index(typeid(int)),"int"},
+		{ std::type_index(typeid(long)),"long" },
+		{ std::type_index(typeid(unsigned int)),"unsigned int" },
+		{ std::type_index(typeid(float)),"float" },
+		{ std::type_index(typeid(double)),"double" }
+	};
 index_t Executor::warp_size_ = 16;
 thread_local cl_device_id Executor::cur_dev_id_ = NULL;
+//load typenames
+
 }
 #endif
