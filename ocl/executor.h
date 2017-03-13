@@ -128,11 +128,11 @@ public:
 	template <typename DType>
 	void ReplaceTemplateParams(std::string& src) {
 		std::string dtype_name = type_names[std::type_index(typeid(DType))];
-		StringReplace(src, { {"DType",dtype_name} });
+		src = StringReplace(src, { {"DType",dtype_name} });
 	}
 	void LoadParams(std::string& src,
 		const std::unordered_map<std::string, std::string>& param_from_to) {
-		StringReplace(src, param_from_to);
+		src = StringReplace(src, param_from_to);
 	}
 private:
 	//typenames
