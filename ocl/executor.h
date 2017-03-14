@@ -9,59 +9,50 @@
 #include "../logging.h"
 #include "../utils/format.h"
 
-
+//#include "stream_ocl-inl.h"
 namespace mlite {
 class Executor {
 public:
 	Executor() {
-		cl_int err;
-		// Set up platform and GPU device
-		cl_uint num_platforms;
-		// Find number of platforms
-		err = clGetPlatformIDs(0, NULL, &num_platforms);
-		CHECK_EQ(err, CL_SUCCESS)
-			<< "Error during Finding platforms!";
-		CHECK_NE(num_platforms, 0)
-			<< "Found 0 platforms!";
-		// Get all platforms
-		cl_platform_id *platform = new cl_platform_id[num_platforms];
-		err = clGetPlatformIDs(num_platforms, platform, NULL);
-		CHECK_EQ(err, CL_SUCCESS)
-			<< "Error during getting platforms!";
-		// Secure a GPU
-		for (index_t i = 0; i < num_platforms; i++) {
-			err = clGetDeviceIDs(
-				platform[i], CL_DEVICE_TYPE_DEFAULT, 1, &cur_dev_id_, NULL);
-			if (err == CL_SUCCESS) 
-				break;
-		}
-		CHECK_NE(cur_dev_id_,0) << "Found 0 devices!";
 		// Create a command queue
-		SetDevice(cur_dev_id_);
-		delete[] platform;
+		GetGPUPlatformId();
+		GetAllDeviceIds();
+		// set default warp size
+		warp_size_ = 16;
+		// create type name dictionary
+		type_names = std::unordered_map<std::type_index, std::string>{
+				{ std::type_index(typeid(short)),"short" },
+				{ std::type_index(typeid(int)),"int" },
+				{ std::type_index(typeid(long)),"long" },
+				{ std::type_index(typeid(unsigned int)),"unsigned int" },
+				{ std::type_index(typeid(float)),"float" },
+				{ std::type_index(typeid(double)),"double" }
+		};
 	}
 	~Executor() {
 		for (Iterator it = dev2context_.begin(); it != dev2context_.end(); it++) {
 			clReleaseContext(it->second);
 		}
 	}
-	static cl_device_id GetDeviceId() {
+	static int GetDeviceId() {
 		return cur_dev_id_;
 	}
-	void SetDevice(const cl_device_id& dev_id) {
+	void SetDevice(const int& dev_id) {
 		cur_dev_id_ = dev_id;
 	}
-	void ReleaseDevice(void) {
-		clReleaseDevice(cur_dev_id_);
+	void ReleaseDevice(const int& dev_id) {
+		clReleaseDevice(dev_ids_[dev_id]);
+	}
+	void QueryWarpSize(void) {
+		std::string query_kernel = "";
 	}
 	static const cl_context GetContext() {
-		static Executor executor;
 		// fisrt check if context already exists
 		if (executor.dev2context_.find(cur_dev_id_) == executor.dev2context_.end()) {
 			// Create a compute context
 			cl_int err;
 			cl_context context =
-				clCreateContext(NULL, 1, &cur_dev_id_, NULL, NULL, &err);
+				clCreateContext(NULL, 1, &executor.dev_ids_[cur_dev_id_], NULL, NULL, &err);
 			executor.dev2context_.insert(std::make_pair(cur_dev_id_, context));
 			CHECK_EQ(err, CL_SUCCESS) << "Error during creating context";
 		}
@@ -84,6 +75,7 @@ public:
 		CHECK_NE(err, 0) << "Error during creating kernel!";
 		return kernel;
 	}
+	//@brief run the kernel function
 	void Run(const cl_kernel& kernel,
 		const std::vector<size_t>& data_size,
 		const std::vector<size_t>& local_size) {
@@ -95,11 +87,12 @@ public:
 			global_size[i] = (data_size[i] + local_size[i] - 1) / local_size[i];
 
 	}
+	//@brief register command queue from stream
 	void RegisterCmdQueue(const std::shared_ptr<cl_command_queue>& queue) {
 		dev2queue_.insert(std::make_pair(cur_dev_id_, queue));
 	}
 	const std::shared_ptr<cl_command_queue>& GetCmdQueue() {
-		std::unordered_map<cl_device_id, std::shared_ptr<cl_command_queue>>::const_iterator
+		std::unordered_map<int, std::shared_ptr<cl_command_queue>>::const_iterator
 			cit = dev2queue_.find(cur_dev_id_);
 		CHECK_NE(cit, dev2queue_.end());
 		return cit->second;
@@ -134,28 +127,70 @@ public:
 		const std::unordered_map<std::string, std::string>& param_from_to) {
 		src = StringReplace(src, param_from_to);
 	}
+protected:
+	//@brief helper function for getting all device ids for a gpu platform
+	void GetAllDeviceIds(void) {
+		cl_int err;
+		cl_uint num_dev_ids = 0;
+		err = clGetDeviceIDs(gpu_platform_id_, CL_DEVICE_TYPE_GPU, 0, NULL,
+			&num_dev_ids);
+		CHECK_EQ(err, CL_SUCCESS) << "Failing getting device count!";
+		//get all avaliable devices
+		err = clGetDeviceIDs(gpu_platform_id_,
+			CL_DEVICE_TYPE_GPU, num_dev_ids, dev_ids_.data(), NULL);
+		CHECK_EQ(err, CL_SUCCESS) << "Failing getting device ids!";
+	}
+	//@brief helper function for getting available gpu platform id
+	void GetGPUPlatformId(void) {
+		cl_int err;
+		// Set up platform and GPU device
+		cl_uint num_platforms;
+		// Find number of platforms
+		err = clGetPlatformIDs(0, NULL, &num_platforms);
+		CHECK_EQ(err, CL_SUCCESS)
+			<< "Error during Finding platforms!";
+		CHECK_NE(num_platforms, 0)
+			<< "Found 0 platforms!";
+		// Get all platforms
+		cl_platform_id *platform = new cl_platform_id[num_platforms];
+		err = clGetPlatformIDs(num_platforms, platform, NULL);
+		CHECK_EQ(err, CL_SUCCESS)
+			<< "Error during getting platforms!";
+		// Secure a GPU
+		cl_device_id dev_id;
+		for (index_t i = 0; i < num_platforms; i++) {
+			err = clGetDeviceIDs(
+				platform[i], CL_DEVICE_TYPE_GPU, 1, &dev_id, NULL);
+			if (err == CL_SUCCESS) {
+				gpu_platform_id_ = platform[i];
+				break;
+			}
+		}
+		CHECK_NE(cur_dev_id_, 0) << "Found 0 devices!";
+
+		delete platform;
+	}
 private:
 	//typenames
-	static std::unordered_map<std::type_index, std::string> type_names;
-	static index_t warp_size_;
+	//Stream< ocl>* stream;
+	std::unordered_map<std::type_index, std::string> type_names;
+	index_t warp_size_;
+	// gpu platforom id
+	cl_platform_id gpu_platform_id_;
+	// all gpu device ids
+	std::vector<cl_device_id> dev_ids_;
 	// map from device id to context
-	std::unordered_map<cl_device_id, cl_context> dev2context_;
-	std::unordered_map<cl_device_id, std::shared_ptr<cl_command_queue>> dev2queue_;
-	typedef std::unordered_map<cl_device_id, cl_context>::iterator Iterator;
+	std::unordered_map<int,cl_context> dev2context_;
+	typedef std::unordered_map<int, cl_context>::iterator Iterator;
+	std::unordered_map<int,std::shared_ptr<cl_command_queue>> dev2queue_;
+
 	// compute device id
-	static thread_local cl_device_id	cur_dev_id_;
+	static thread_local int	cur_dev_id_;
+	//singleton
+	static Executor executor;
 };
-std::unordered_map<std::type_index, std::string> Executor::type_names = 
-	std::unordered_map<std::type_index, std::string>{
-		{ std::type_index(typeid(short)),"short" },
-		{ std::type_index(typeid(int)),"int"},
-		{ std::type_index(typeid(long)),"long" },
-		{ std::type_index(typeid(unsigned int)),"unsigned int" },
-		{ std::type_index(typeid(float)),"float" },
-		{ std::type_index(typeid(double)),"double" }
-	};
-index_t Executor::warp_size_ = 16;
-thread_local cl_device_id Executor::cur_dev_id_ = NULL;
+Executor Executor::executor = Executor();
+thread_local int Executor::cur_dev_id_ = 0;
 //load typenames
 
 }
