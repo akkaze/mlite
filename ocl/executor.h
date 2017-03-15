@@ -17,10 +17,15 @@ public:
 		// Create a command queue
 		GetGPUPlatformId();
 		GetAllDeviceIds();
+		// set default context and command queue
+		GetContext();
+		GetCmdQueue();
 		// set default warp size
-		warp_size_ = 16;
+		warp_size_ = 160;
 		// set the default device id to 0
 		cur_dev_id_ = 0;
+		// queury the best warp size
+		QueryWarpSize();
 		// create type name dictionary
 		type_names = std::unordered_map<std::type_index, std::string>{
 				{ std::type_index(typeid(short)),"short" },
@@ -50,7 +55,6 @@ public:
 	}
 	/////////////////////////getters/////////////////////
 	static Executor* Get() {
-		static Executor executor;
 		return &executor;
 	}
 	//@brief get or create the cl context
@@ -60,8 +64,10 @@ public:
 			// Create a compute context
 			cl_int err;
 			cl_context context =
-				clCreateContext(NULL, 1, &executor.dev_ids_[cur_dev_id_], NULL, NULL, &err);
-			executor.dev2context_.insert(std::make_pair(cur_dev_id_, context));
+				clCreateContext(NULL, 1, &executor.dev_ids_[cur_dev_id_],
+					NULL, NULL, &err);
+			executor.dev2context_.insert(
+				std::make_pair(cur_dev_id_, context));
 			CHECK_EQ(err, CL_SUCCESS) << "Error during creating context";
 		}
 		std::unordered_map<int,cl_context>::iterator it = 
@@ -76,9 +82,11 @@ public:
 			cl_int err;
 			cl_context context = executor.GetContext();
 			cl_command_queue command_queue =
-				clCreateCommandQueue(context, executor.dev_ids_[cur_dev_id_], 0, &err);
-			executor.dev2queue_.insert(std::make_pair(cur_dev_id_, command_queue));
-			CHECK_EQ(err, CL_SUCCESS) << "Error during creating context";
+				clCreateCommandQueue(context, 
+					executor.dev_ids_[cur_dev_id_],0, &err);
+			executor.dev2queue_.insert(
+				std::make_pair(cur_dev_id_, command_queue));
+			CHECK_EQ(err, CL_SUCCESS) << "Error during creating command queue";
 		}
 		std::unordered_map<int, cl_command_queue>::iterator it =
 			executor.dev2queue_.find(cur_dev_id_);
@@ -92,13 +100,13 @@ public:
 		cl_context context = dev2context_[cur_dev_id_];
 		cl_program program = clCreateProgramWithSource(
 			context, 1, (const char **)&kernel_src_cstr, NULL, &err);
-		CHECK_NE(err, 0) << "Error during creating program!";
+		//CHECK_EQ(err, CL_SUCCESS) << "Error during creating program!";
 		// Build the program
 		err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
-		CHECK_NE(err, 0) << "Error during building program!";
+		//CHECK_EQ(err, CL_SUCCESS) << "Error during building program!";
 		// Create the compute kernel from the program
 		cl_kernel kernel = clCreateKernel(program, kernel_name.c_str(), &err);
-		CHECK_NE(err, 0) << "Error during creating kernel!";
+		//CHECK_EQ(err, CL_SUCCESS) << "Error during creating kernel!";
 		return kernel;
 	}
 	//@brief run the kernel function
@@ -106,12 +114,14 @@ public:
 		const std::vector<size_t>& data_size,
 		const std::vector<size_t>& local_size) {
 		cl_int err;
-		CHECK_EQ(data_size.size(),local_size.size()) 
-			<< "data must have same dimension with block";
-		std::vector<size_t> global_size(data_size.size());
-		for (index_t i = 0; i < data_size.size(); i++)
-			global_size[i] = (data_size[i] + local_size[i] - 1) / local_size[i];
-
+		if (!local_size.empty()) {
+			CHECK_EQ(data_size.size(), local_size.size())
+				<< "data must have same dimension with block";
+			std::vector<size_t> global_size(data_size.size());
+			for (index_t i = 0; i < data_size.size(); i++)
+				global_size[i] = (data_size[i] + local_size[i] - 1) / local_size[i];
+		}
+		err = clEnqueueNDRangeKernel(, kernel, 1, NULL, &global, NULL, 0, NULL, NULL);
 	}
 
 	////////////////////passes before compiling//////////////////
@@ -144,7 +154,14 @@ public:
 protected:
 	//@brief helper function for getting warp size of this gpu platform
 	void QueryWarpSize(void) {
-		std::string query_kernel = "";
+		std::string query_kernel_src = "__kernel void QueryWarpSize() {}";
+		cl_kernel query_kernel = Complie(query_kernel_src,"query_warp_size");
+		Run(query_kernel, { warp_size_ }, {});
+		clGetKernelWorkGroupInfo(query_kernel, dev_ids_[cur_dev_id_], 
+			CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, 
+			sizeof(size_t), &warp_size_, NULL);
+		std::cout << warp_size_ << '\n';
+
 	}
 	//@brief helper function for getting all device ids for a gpu platform
 	void GetAllDeviceIds(void) {
@@ -154,6 +171,7 @@ protected:
 			&num_dev_ids);
 		CHECK_EQ(err, CL_SUCCESS) << "Failing getting device count!";
 		//get all avaliable devices
+		dev_ids_.resize(num_dev_ids);
 		err = clGetDeviceIDs(gpu_platform_id_,
 			CL_DEVICE_TYPE_GPU, num_dev_ids, dev_ids_.data(), NULL);
 		CHECK_EQ(err, CL_SUCCESS) << "Failing getting device ids!";
