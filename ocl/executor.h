@@ -19,6 +19,8 @@ public:
 		GetAllDeviceIds();
 		// set default warp size
 		warp_size_ = 16;
+		// set the default device id to 0
+		cur_dev_id_ = 0;
 		// create type name dictionary
 		type_names = std::unordered_map<std::type_index, std::string>{
 				{ std::type_index(typeid(short)),"short" },
@@ -30,10 +32,13 @@ public:
 		};
 	}
 	~Executor() {
-		for (Iterator it = dev2context_.begin(); it != dev2context_.end(); it++) {
+		for (std::unordered_map<int,cl_context>::iterator
+			it = dev2context_.begin(); it != dev2context_.end(); it++) {
 			clReleaseContext(it->second);
 		}
 	}
+
+	/////////////////////////device related routines///////////////
 	static int GetDeviceId() {
 		return cur_dev_id_;
 	}
@@ -43,10 +48,13 @@ public:
 	void ReleaseDevice(const int& dev_id) {
 		clReleaseDevice(dev_ids_[dev_id]);
 	}
-	void QueryWarpSize(void) {
-		std::string query_kernel = "";
+	/////////////////////////getters/////////////////////
+	static Executor* Get() {
+		static Executor executor;
+		return &executor;
 	}
-	static const cl_context GetContext() {
+	//@brief get or create the cl context
+	static const cl_context& GetContext() {
 		// fisrt check if context already exists
 		if (executor.dev2context_.find(cur_dev_id_) == executor.dev2context_.end()) {
 			// Create a compute context
@@ -56,9 +64,27 @@ public:
 			executor.dev2context_.insert(std::make_pair(cur_dev_id_, context));
 			CHECK_EQ(err, CL_SUCCESS) << "Error during creating context";
 		}
-		Iterator it = executor.dev2context_.find(cur_dev_id_);
+		std::unordered_map<int,cl_context>::iterator it = 
+			executor.dev2context_.find(cur_dev_id_);
 		return it->second;
 	}
+	//@brief get or create the cl command queue
+	static const cl_command_queue& GetCmdQueue() {
+		// fisrt check if command queue already exists
+		if (executor.dev2queue_.find(cur_dev_id_) == executor.dev2queue_.end()) {
+			// Create a command queue associate to current thread local device id
+			cl_int err;
+			cl_context context = executor.GetContext();
+			cl_command_queue command_queue =
+				clCreateCommandQueue(context, executor.dev_ids_[cur_dev_id_], 0, &err);
+			executor.dev2queue_.insert(std::make_pair(cur_dev_id_, command_queue));
+			CHECK_EQ(err, CL_SUCCESS) << "Error during creating context";
+		}
+		std::unordered_map<int, cl_command_queue>::iterator it =
+			executor.dev2queue_.find(cur_dev_id_);
+		return it->second;
+	}
+	//@brief compile the kernel source
 	cl_kernel Complie(const std::string& kernel_src, const std::string& kernel_name) {
 		cl_int err;
 		// Create the compute program from the source buffer
@@ -87,20 +113,8 @@ public:
 			global_size[i] = (data_size[i] + local_size[i] - 1) / local_size[i];
 
 	}
-	//@brief register command queue from stream
-	void RegisterCmdQueue(const std::shared_ptr<cl_command_queue>& queue) {
-		dev2queue_.insert(std::make_pair(cur_dev_id_, queue));
-	}
-	const std::shared_ptr<cl_command_queue>& GetCmdQueue() {
-		std::unordered_map<int, std::shared_ptr<cl_command_queue>>::const_iterator
-			cit = dev2queue_.find(cur_dev_id_);
-		CHECK_NE(cit, dev2queue_.end());
-		return cit->second;
-	}
-	static Executor* Get() {
-		static Executor executor;
-		return &executor;
-	}
+
+	////////////////////passes before compiling//////////////////
 	std::string LoadPragram(const std::string& src_file) {
 		std::ifstream in;
 		in.open(src_file.c_str(), std::ios::in);
@@ -128,6 +142,10 @@ public:
 		src = StringReplace(src, param_from_to);
 	}
 protected:
+	//@brief helper function for getting warp size of this gpu platform
+	void QueryWarpSize(void) {
+		std::string query_kernel = "";
+	}
 	//@brief helper function for getting all device ids for a gpu platform
 	void GetAllDeviceIds(void) {
 		cl_int err;
@@ -166,7 +184,6 @@ protected:
 				break;
 			}
 		}
-		CHECK_NE(cur_dev_id_, 0) << "Found 0 devices!";
 
 		delete platform;
 	}
@@ -182,7 +199,7 @@ private:
 	// map from device id to context
 	std::unordered_map<int,cl_context> dev2context_;
 	typedef std::unordered_map<int, cl_context>::iterator Iterator;
-	std::unordered_map<int,std::shared_ptr<cl_command_queue>> dev2queue_;
+	std::unordered_map<int,cl_command_queue> dev2queue_;
 
 	// compute device id
 	static thread_local int	cur_dev_id_;
