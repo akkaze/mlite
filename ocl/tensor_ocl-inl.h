@@ -4,6 +4,7 @@
 #include "../tensor.h"
 #include "stream_ocl-inl.h"
 #include "executor.h"
+
 namespace mlite {
 template<>
 MLITE_XINLINE void InitTensorEngine<ocl>(int dev_id) {
@@ -26,7 +27,7 @@ MLITE_XINLINE void ShutdownTensorEngine<ocl>(void) {
 	Executor::Get()->ReleaseDevice();
 }
 template<>
-MLITE_XINLINE void SetDevice<ocl>(int devid) {
+MLITE_XINLINE void SetDevice<ocl>(int dev_id) {
 	Executor::Get()->SetDevice(&dev_id);
 }
 template<>
@@ -45,6 +46,15 @@ MLITE_XINLINE void AllocSpace(Tensor<ocl, DType> *obj) {
 	obj->set_cl_data(clCreateBuffer(
 		context, CL_MEM_READ_WRITE, obj->size() * sizeof(DType), NULL, &err));
 	CHECK_NE(err, CL_FALSE) << "Error allocting device memory!";
+}
+template<typename Device, typename DType>
+MLITE_XINLINE Tensor<Device, DType>
+NewTensor(const Shape& shape,
+	DType initv, Stream<Device> *stream) {
+	Tensor<Device, DType> obj(shape);
+	obj.set_stream(stream);
+	AllocSpace(&obj);
+	return obj;
 }
 template<typename DType>
 MLITE_XINLINE void FreeSpace(Tensor<ocl, DType> *obj) {

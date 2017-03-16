@@ -97,31 +97,32 @@ public:
 		cl_int err;
 		// Create the compute program from the source buffer
 		const char* kernel_src_cstr = kernel_src.c_str();
-		cl_context context = dev2context_[cur_dev_id_];
+		
+		cl_context context = executor.GetContext();
 		cl_program program = clCreateProgramWithSource(
 			context, 1, (const char **)&kernel_src_cstr, NULL, &err);
-		//CHECK_EQ(err, CL_SUCCESS) << "Error during creating program!";
+		CHECK_EQ(err, CL_SUCCESS) << "Error during creating program!";
 		// Build the program
 		err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
-		//CHECK_EQ(err, CL_SUCCESS) << "Error during building program!";
+		CHECK_EQ(err, CL_SUCCESS) << "Error during building program!";
 		// Create the compute kernel from the program
 		cl_kernel kernel = clCreateKernel(program, kernel_name.c_str(), &err);
-		//CHECK_EQ(err, CL_SUCCESS) << "Error during creating kernel!";
+		CHECK_EQ(err, CL_SUCCESS) << "Error during creating kernel!";
 		return kernel;
 	}
 	//@brief run the kernel function
 	void Run(const cl_kernel& kernel,
-		const std::vector<size_t>& data_size,
-		const std::vector<size_t>& local_size) {
+		std::vector<size_t>& data_size,
+		 std::vector<size_t> local_size) {
 		cl_int err;
 		if (!local_size.empty()) {
 			CHECK_EQ(data_size.size(), local_size.size())
 				<< "data must have same dimension with block";
-			std::vector<size_t> global_size(data_size.size());
 			for (index_t i = 0; i < data_size.size(); i++)
-				global_size[i] = (data_size[i] + local_size[i] - 1) / local_size[i];
+				data_size[i] = (data_size[i] + local_size[i] - 1) / local_size[i];
 		}
-		err = clEnqueueNDRangeKernel(, kernel, 1, NULL, &global, NULL, 0, NULL, NULL);
+		const cl_command_queue& queue = executor.GetCmdQueue();
+		err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, data_size.data(), NULL, 0, NULL, NULL);
 	}
 
 	////////////////////passes before compiling//////////////////
@@ -155,13 +156,11 @@ protected:
 	//@brief helper function for getting warp size of this gpu platform
 	void QueryWarpSize(void) {
 		std::string query_kernel_src = "__kernel void QueryWarpSize() {}";
-		cl_kernel query_kernel = Complie(query_kernel_src,"query_warp_size");
-		Run(query_kernel, { warp_size_ }, {});
+		cl_kernel query_kernel = Complie(query_kernel_src,"QueryWarpSize");
+		Run(query_kernel, std::vector<size_t>{ warp_size_ }, std::vector<size_t>{});
 		clGetKernelWorkGroupInfo(query_kernel, dev_ids_[cur_dev_id_], 
 			CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, 
 			sizeof(size_t), &warp_size_, NULL);
-		std::cout << warp_size_ << '\n';
-
 	}
 	//@brief helper function for getting all device ids for a gpu platform
 	void GetAllDeviceIds(void) {

@@ -18,20 +18,14 @@ struct Stream<ocl> {
 		OwnHandle = 1,
 	};
 	Stream(void) {
-		cl_int err;
-		cl_device_id cur_dev_id = Executor::GetDeviceId();
-		cl_context context = Executor::GetContext();
-		// Create a compute context
-		cl_command_queue command_queue = 
-			clCreateCommandQueue(context, cur_dev_id, 0, &err);
-		queue_.reset(command_queue);
-		Executor::Get()->RegisterCmdQueue(queue_);
+		// get a compute context
+		queue_ = Executor::GetCmdQueue();
 	}
 	~Stream(void) {
-		clFinish(*queue_);
+		clFinish(queue_);
 	}
 	// compute command queue
-	std::shared_ptr<cl_command_queue> queue_;
+	cl_command_queue queue_;
 };
 }
 #endif // !MLITE_OCL_STREAM_H_

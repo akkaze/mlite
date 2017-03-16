@@ -58,7 +58,7 @@ public:
 				C[row_id * B_shp[1] + col_id] = Csub; \
 		} \
 		}";
-		
+		return matmul_kernel_src;
 	}
 	void Execute(Tensor<ocl, DType>* dst) {
 		
